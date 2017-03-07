@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <dirent.h>
+#include "ConsoleColor.h"
 
 #include "TROOT.h"
 #include "TCanvas.h"
@@ -18,34 +19,34 @@
 #include "TTimeStamp.h"
 
 
-class BiasSweepData : public TObject
-{
-  public:
-    uint16_t fFeId;
-    uint16_t fCbcId;
-    std::string fBias;
-    long int fTimestamp;
-    char fUnit[2];
-    uint16_t fInitialXValue;
-    float fInitialYValue;
-    std::vector<uint16_t> fXValues;
-    std::vector<float> fYValues;
+//class BiasSweepData : public TObject
+//{
+//public:
+//uint16_t fFeId;
+//uint16_t fCbcId;
+//std::string fBias;
+//long int fTimestamp;
+//char fUnit[2];
+//uint16_t fInitialXValue;
+//float fInitialYValue;
+//std::vector<uint16_t> fXValues;
+//std::vector<float> fYValues;
 
-    BiasSweepData() : fFeId (0), fCbcId (0), fBias (""), fTimestamp (0)
-    {
-    }
-    ~BiasSweepData() {}
-    //cTree->Branch ("Bias", &fData->fBias);
-    //cTree->Branch ("Fe", &fData->fFeId, "Fe/s" );
-    //cTree->Branch ("Cbc", &fData->fCbcId, "Cbc/s" );
-    //cTree->Branch ("Time", &fData->fTimestamp, "Time/l" );
-    //cTree->Branch ("Unit", &fData->fUnit, "Unit/C" );
-    //cTree->Branch ("InitialBiasValue", &fData->fInitialXValue, "InitialDAC/s");
-    //cTree->Branch ("InitialDMMValue", &fData->fInitialYValue, "InitialDMM/F");
-    //cTree->Branch ("BiasValues", &fData->fXValues);
-    //cTree->Branch ("DMMValues", &fData->fYValues);
+//BiasSweepData() : fFeId (0), fCbcId (0), fBias (""), fTimestamp (0)
+//{
+//}
+//~BiasSweepData() {}
+//cTree->Branch ("Bias", &fData->fBias);
+//cTree->Branch ("Fe", &fData->fFeId, "Fe/s" );
+//cTree->Branch ("Cbc", &fData->fCbcId, "Cbc/s" );
+//cTree->Branch ("Time", &fData->fTimestamp, "Time/l" );
+//cTree->Branch ("Unit", &fData->fUnit, "Unit/C" );
+//cTree->Branch ("InitialBiasValue", &fData->fInitialXValue, "InitialDAC/s");
+//cTree->Branch ("InitialDMMValue", &fData->fInitialYValue, "InitialDMM/F");
+//cTree->Branch ("BiasValues", &fData->fXValues);
+//cTree->Branch ("DMMValues", &fData->fYValues);
 
-};
+//};
 
 std::vector<std::string> list_folders (std::string pDirectory)
 {
@@ -62,7 +63,7 @@ std::vector<std::string> list_folders (std::string pDirectory)
             cFilename += static_cast<std::string> (entry->d_name);
             cFilename += "/Cbc3RadiationCycle.root";
             cFilelist.push_back (cFilename);
-            std::cout << cFilename << std::endl;
+            //std::cout << cFilename << std::endl;
         }
 
         entry = readdir (dir);
@@ -107,7 +108,7 @@ timepair get_times (std::string pTimefile)
                 //-1 because I need UTC
                 TTimeStamp tsstart (year, month, day, hour - 1, minute, seconds);
                 tmppair.first = static_cast<long int> (tsstart.GetSec() );
-                std::cout << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstart.GetSec() << " in UTC" << std::endl;
+                std::cout << GREEN << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstart.GetSec() << " in UTC" << RESET << std::endl;
 
                 if (!cTimefile.eof() )
                 {
@@ -118,7 +119,7 @@ timepair get_times (std::string pTimefile)
                         //-1 because I need UTC
                         TTimeStamp tsstop (year, month, day, hour - 1, minute, seconds);
                         tmppair.second = static_cast<long int> (tsstop.GetSec() );
-                        std::cout << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstop.GetSec() << " in UTC" << std::endl;
+                        std::cout << RED << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstop.GetSec() << " in UTC" << RESET << std::endl;
 
                     }
                     else std::cout << "ERROR in the file format" << std::endl;
@@ -137,10 +138,10 @@ timepair get_times (std::string pTimefile)
     return cPair;
 }
 
-TGraph* draw_dose (std::string pTimefile, TGraph* pGraph)
+TGraph* draw_dose (timepair pTimepair, TGraph* pGraph)
 {
-    timepair cTimes = get_times (pTimefile);
-    float cDoserate = cTimes.doserate / 3600.; // 20kGy/h / 3600s
+    //timepair pTimepair = get_times (pTimefile);
+    float cDoserate = pTimepair.doserate / 3600.; // 20kGy/h / 3600s
     //first, analyze the passed graph
     int cN = pGraph->GetN();
     double* cY = pGraph->GetY();
@@ -159,8 +160,9 @@ TGraph* draw_dose (std::string pTimefile, TGraph* pGraph)
     //then, fill the dose graph
     TGraph* cDoseGraph = new TGraph();
     float cDose = 0;
+    long int cMaxDoseTime = 0;
 
-    for (auto cTimepair : cTimes.timepair)
+    for (auto cTimepair : pTimepair.timepair)
     {
         cDoseGraph->SetPoint (cDoseGraph->GetN(), cTimepair.first, cDose);
 
@@ -169,6 +171,7 @@ TGraph* draw_dose (std::string pTimefile, TGraph* pGraph)
         {
             cDose += cDoserate * (cTimepair.second - cTimepair.first);
             cDoseGraph->SetPoint (cDoseGraph->GetN(), cTimepair.second, cDose);
+            cMaxDoseTime = cTimepair.second;
         }
         //  end is later than the last point in the graph
         //  set the last point to the dose at timestamp
@@ -176,12 +179,14 @@ TGraph* draw_dose (std::string pTimefile, TGraph* pGraph)
         {
             cDose += cDoserate * (cTimestamp - cTimepair.first);
             cDoseGraph->SetPoint (cDoseGraph->GetN(), cTimestamp, cDose);
+            cMaxDoseTime = cTimestamp;
         }
         //there is no end and thus the last point in the graph is the latest
         else if (cTimepair.second == 0 && cTimestamp > cTimepair.first )
         {
             cDose += (cTimestamp - cTimepair.first) * cDoserate;
             cDoseGraph->SetPoint (cDoseGraph->GetN(), cTimestamp, cDose);
+            cMaxDoseTime = cTimestamp;
         }
     }
 
@@ -189,7 +194,8 @@ TGraph* draw_dose (std::string pTimefile, TGraph* pGraph)
     float cMaxDose = cDose;
     //get the minimum and maximum of the Y axis - and scale that range by the max dose
     float cScaleFactor = (pGraph->GetYaxis()->GetXmax() - pGraph->GetYaxis()->GetXmin() ) / cMaxDose;
-    std::cout << "max dose: " << cMaxDose << " min Y " << cMinY << " max Y: " << cMaxY << " scale: " << cScaleFactor << std::endl;
+    TTimeStamp ts (static_cast<time_t> (cMaxDoseTime) );
+    std::cout << BLUE << "max dose: " << cMaxDose << " at time: " << ts.AsString ("lc") << " min Y " << cMinY << " max Y: " << cMaxY << " scale: " << cScaleFactor << RESET << std::endl;
     //done filling the dose graph, I still need to scale it
     cN = cDoseGraph->GetN();
     cY = cDoseGraph->GetY();
@@ -225,9 +231,8 @@ TGraph* draw_dose (std::string pTimefile, TGraph* pGraph)
 
 
 
-void plot_bias (std::string pDatadir, std::string pTimefile, std::string pBias)
+void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias)
 {
-    //get_times ("pTimefile");
     TGraph* cGraph = new TGraph();
     gROOT->ProcessLine ("#include <vector>");
     std::vector<std::string> cFileList = list_folders (pDatadir);
@@ -264,7 +269,7 @@ void plot_bias (std::string pDatadir, std::string pTimefile, std::string pBias)
                     {
                         cTree->GetEntry (i);
 
-                        std::cout << *cBias << " " << cTimestamp << " " << cValue << std::endl;
+                        //std::cout << *cBias << " " << cTimestamp << " " << cValue << std::endl;
 
                         if (*cBias == pBias)
                         {
@@ -286,12 +291,13 @@ void plot_bias (std::string pDatadir, std::string pTimefile, std::string pBias)
     cGraph->SetTitle (pBias.c_str() );
 
     //TCanvas* c1 = new TCanvas ("c1", "c1");
-    draw_dose (pTimefile, cGraph);
+    draw_dose (pTimepair, cGraph);
 }
 
 void analyze()
 {
-    plot_bias ("Data", "timefile_chip1", "VBG_LDO");
-    plot_bias ("Data", "timefile_chip1", "MinimalPower");
+    timepair cTimepair = get_times ("timefile_chip1");
+    plot_bias ("Data", cTimepair, "VBG_LDO");
+    plot_bias ("Data", cTimepair, "MinimalPower");
 }
 #endif
