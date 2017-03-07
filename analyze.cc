@@ -19,6 +19,7 @@
 #include "TTimeStamp.h"
 
 
+
 //class BiasSweepData : public TObject
 //{
 //public:
@@ -227,10 +228,6 @@ TGraph* draw_dose (timepair pTimepair, TGraph* pGraph)
     return cDoseGraph;
 }
 
-
-
-
-
 void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias)
 {
     TGraph* cGraph = new TGraph();
@@ -253,15 +250,24 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias)
                 {
                     std::string* cBias = nullptr;
                     long int  cTimestamp = 0;
+                    int cBiasSetting = 0;
                     float cValue = 0;
+                    std::vector<uint16_t>* cBiasVector = nullptr;
+                    std::vector<float>* cDMMVector = nullptr;
 
                     auto cBiasBranch = cTree->GetBranch ("Bias");
                     auto cTimeBranch  = cTree->GetBranch ("Time");
+                    auto cInitialXBranch  = cTree->GetBranch ("InitialBiasValue");
                     auto cInitialYBranch  = cTree->GetBranch ("InitialDMMValue");
+                    auto cBiasVectorBranch = cTree->GetBranch ("BiasValues");
+                    auto cDMMVectorBranch = cTree->GetBranch ("DMMValues");
 
                     cBiasBranch->SetAddress (&cBias);
                     cTimeBranch->SetAddress (&cTimestamp);
+                    cInitialXBranch->SetAddress (&cBiasSetting);
                     cInitialYBranch->SetAddress (&cValue);
+                    cBiasVectorBranch->SetAddress (&cBiasVector);
+                    cDMMVectorBranch->SetAddress (&cDMMVector);
 
                     auto cNentries = cTree->GetEntries();
 
@@ -296,8 +302,42 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias)
 
 void analyze()
 {
-    timepair cTimepair = get_times ("timefile_chip1");
-    plot_bias ("Data", cTimepair, "VBG_LDO");
-    plot_bias ("Data", cTimepair, "MinimalPower");
+    //timepair cTimepair = get_times ("timefile_chip1");
+    //plot_bias ("Chip1_358kGy", cTimepair, "VBG_LDO");
+    //plot_bias ("Chip1_358kGy", cTimepair, "MinimalPower");
+
+    timepair cTimepair = get_times ("timefile_chip0");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "MinimalPower");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "VCth");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBGbias");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "Vpafb");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "VPLUS1");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "VPLUS2");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipre1");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipre2");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipaos");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipsf");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "Icomp");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ihyst");
 }
+// key(BiasSweep, reg name, amux code, bit mask, bit shift
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("none"),   std::make_tuple ("", 0x00, 0x00, 0) ); fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipa"),    std::make_tuple ("Ipa", 0x01, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipre2"),  std::make_tuple ("Ipre2", 0x02, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("CAL_I"),  std::make_tuple ("CALIbias", 0x03, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ibias"),  std::make_tuple ("Ibias", 0x04, 0x00, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VCth"),    std::make_tuple ("", 0x05, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VBGbias"), std::make_tuple ("BandgapFuse", 0x06, 0x3F, 0) );//read this on the VDDA line?
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VBG_LDO"), std::make_tuple ("", 0x07, 0x00, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Vpafb"),  std::make_tuple ("", 0x08, 0x00, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Nc50"),   std::make_tuple ("", 0x09, 0x00, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipre1"),  std::make_tuple ("Ipre1", 0x0A, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipsf"),   std::make_tuple ("Ipsf", 0x0B, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipaos"),  std::make_tuple ("Ipaos", 0x0C, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Icomp"),  std::make_tuple ("Icomp", 0x0D, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ihyst"),  std::make_tuple ("FeCtrl&TrgLat2", 0x0E, 0x3C, 2) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("CAL_Vcasc"), std::make_tuple ("CALVcasc", 0x0F, 0xFF, 0) );
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VPLUS2"), std::make_tuple ("Vplus1&2", 0x10, 0xF0, 4) ) ;
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VPLUS1"), std::make_tuple ("Vplus1&2", 0x11, 0x0F, 0) ) ;
+//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VDDA"), std::make_tuple ("", 0x00, 0x00, 0) ) ;
 #endif
