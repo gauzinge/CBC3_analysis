@@ -137,7 +137,7 @@ timepair get_times (std::string pTimefile)
     return cPair;
 }
 
-TGraph* draw_dose (std::string pTimefile, TGraph* pGraph, TCanvas* pCanvas)
+TGraph* draw_dose (std::string pTimefile, TGraph* pGraph)
 {
     timepair cTimes = get_times (pTimefile);
     float cDoserate = cTimes.doserate / 3600.; // 20kGy/h / 3600s
@@ -202,7 +202,9 @@ TGraph* draw_dose (std::string pTimefile, TGraph* pGraph, TCanvas* pCanvas)
     cDoseGraph->GetXaxis()->SetTimeDisplay (1);
     cDoseGraph->SetLineWidth (2);
     cDoseGraph->SetLineColor (2);
-    pCanvas->cd();
+
+    TCanvas* cCanvas = new TCanvas (pGraph->GetTitle(), pGraph->GetTitle() );
+    cCanvas->cd();
     pGraph->Draw ("AP");
 
     TGaxis* cAxis = new TGaxis (pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmax(), 0, cMaxDose, 510, "+L");
@@ -213,8 +215,8 @@ TGraph* draw_dose (std::string pTimefile, TGraph* pGraph, TCanvas* pCanvas)
     cAxis->SetTitleColor (2);
 
     cDoseGraph->Draw ("PL same");
-    pCanvas->Modified();
-    pCanvas->Update();
+    cCanvas->Modified();
+    cCanvas->Update();
 
     return cDoseGraph;
 }
@@ -223,13 +225,12 @@ TGraph* draw_dose (std::string pTimefile, TGraph* pGraph, TCanvas* pCanvas)
 
 
 
-void plot_bias()
+void plot_bias (std::string pDatadir, std::string pTimefile, std::string pBias)
 {
-    get_times ("timefile_chip1");
-    TGraph* cMinPowerGraph = new TGraph();
-    TGraph* cBandgapBias = new TGraph();
+    //get_times ("pTimefile");
+    TGraph* cGraph = new TGraph();
     gROOT->ProcessLine ("#include <vector>");
-    std::vector<std::string> cFileList = list_folders ("Data");
+    std::vector<std::string> cFileList = list_folders (pDatadir);
 
     for (auto& cFilename : cFileList)
     {
@@ -265,15 +266,10 @@ void plot_bias()
 
                         std::cout << *cBias << " " << cTimestamp << " " << cValue << std::endl;
 
-                        if (*cBias == "VBG_LDO")
+                        if (*cBias == pBias)
                         {
                             //std::cout << *cBias << " " << cTimestamp << " " << cValue << std::endl;
-                            cBandgapBias->SetPoint (cBandgapBias->GetN(), cTimestamp, cValue);
-                        }
-                        else if (*cBias == "MinimalPower")
-                        {
-                            //std::cout << *cBias << " " << cTimestamp << " " << cValue << std::endl;
-                            cMinPowerGraph->SetPoint (cMinPowerGraph->GetN(), cTimestamp, cValue);
+                            cGraph->SetPoint (cGraph->GetN(), cTimestamp, cValue);
                         }
                     }
                 }
@@ -282,23 +278,20 @@ void plot_bias()
         }
     }
 
-    cBandgapBias->GetXaxis()->SetTimeDisplay (1);
-    cBandgapBias->GetYaxis()->SetTitle ("Bandgap Voltage [V]");
-    cBandgapBias->GetYaxis()->SetTitleOffset (1.25);
-    cBandgapBias->GetXaxis()->SetTitle ("Time");
-    cBandgapBias->SetMarkerStyle (8);
+    cGraph->GetXaxis()->SetTimeDisplay (1);
+    cGraph->GetYaxis()->SetTitle (pBias.c_str() );
+    cGraph->GetYaxis()->SetTitleOffset (1.25);
+    cGraph->GetXaxis()->SetTitle ("Time");
+    cGraph->SetMarkerStyle (8);
+    cGraph->SetTitle (pBias.c_str() );
 
+    //TCanvas* c1 = new TCanvas ("c1", "c1");
+    draw_dose (pTimefile, cGraph);
+}
 
-    cMinPowerGraph->GetXaxis()->SetTimeDisplay (1);
-    cMinPowerGraph->GetYaxis()->SetTitle ("Minimal Drawn current on VDDD [A]");
-    cMinPowerGraph->GetYaxis()->SetTitleOffset (1.25);
-    cMinPowerGraph->GetXaxis()->SetTitle ("Time");
-    cMinPowerGraph->SetMarkerStyle (8);
-
-    TCanvas* c1 = new TCanvas ("c1", "c1");
-    TCanvas* c2 = new TCanvas ("c2", "c2");
-
-    draw_dose ("timefile_chip1", cMinPowerGraph, c1);
-    draw_dose ("timefile_chip1", cBandgapBias, c2);
+void analyze()
+{
+    plot_bias ("Data", "timefile_chip1", "VBG_LDO");
+    plot_bias ("Data", "timefile_chip1", "MinimalPower");
 }
 #endif
