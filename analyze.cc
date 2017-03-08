@@ -363,7 +363,7 @@ void plot_sweep (std::string pDatadir, timepair pTimepair, std::string pBias)
                     {
                         std::string cGraphName = static_cast<std::string> (cKey->GetName() );
 
-                        if (cGraphName.find (pBias) != std::string::npos)
+                        if (cGraphName.find (pBias + "_") != std::string::npos)
                         {
                             TGraph* cTmpGraph;// = static_cast<TGraph*> (cKey->ReadObj() );
                             cDir->GetObject (cGraphName.c_str(), cTmpGraph);
@@ -371,7 +371,7 @@ void plot_sweep (std::string pDatadir, timepair pTimepair, std::string pBias)
                             long int cTimestamp = atoi (cGraphName.substr (cGraphName.find ("TS") + 2).c_str() );
                             cTmpGraph->SetTitle (Form ("%3.0f %s", get_dose (pTimepair, cTimestamp), "kGy" ) );
                             cGraph->Add (cTmpGraph);
-                            //std::cout << cGraphName << " " << cTimestamp << std::endl;
+                            std::cout << cGraphName << " " << cKey->GetName() << std::endl;
                             cColor++;
                         }
                     }
@@ -485,10 +485,11 @@ void analyze()
     //plot_bias ("Chip1_358kGy", cTimepair, "MinimalPower");
 
     timepair cTimepair = get_times ("timefile_chip0");
-    plot_sweep ("Data/Chip0_55kGy", cTimepair, "VCth");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "dose");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "time");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "temperature");
+    plot_sweep ("Data/Chip0_55kGy", cTimepair, "Ipre1");
+    plot_sweep ("Data/Chip0_55kGy", cTimepair, "Ipa");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "dose");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "time");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "temperature");
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "MinimalPower", "dose");
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "VCth", "time");
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "VBGbias");
