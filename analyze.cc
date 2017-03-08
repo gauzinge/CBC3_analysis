@@ -17,8 +17,10 @@
 #include "TMath.h"
 #include "TGaxis.h"
 #include "TTimeStamp.h"
+#include "TDirectory.h"
+#include "TMultiGraph.h"
 
-
+int gCanvasCounter = 0;
 
 //class BiasSweepData : public TObject
 //{
@@ -49,7 +51,7 @@
 
 //};
 
-std::vector<std::string> list_folders (std::string pDirectory)
+std::vector<std::string> list_folders (std::string pDirectory, std::string pFilename)
 {
     std::vector<std::string> cFilelist;
     DIR* dir = opendir (pDirectory.c_str() );
@@ -62,7 +64,8 @@ std::vector<std::string> list_folders (std::string pDirectory)
         {
             std::string cFilename = pDirectory + "/";
             cFilename += static_cast<std::string> (entry->d_name);
-            cFilename += "/Cbc3RadiationCycle.root";
+            cFilename += "/";
+            cFilename += pFilename;
             cFilelist.push_back (cFilename);
             //std::cout << cFilename << std::endl;
         }
@@ -72,6 +75,71 @@ std::vector<std::string> list_folders (std::string pDirectory)
 
     closedir (dir);
     return cFilelist;
+}
+
+void merge_files (std::string pDatadir, std::string pOutfile)
+{
+    std::vector<std::string> cFileList = list_folders (pDatadir, "Temperature_log.txt");
+    std::ofstream of (pOutfile);
+
+    if (of.is_open() )
+    {
+        for (auto& cFilename : cFileList)
+        {
+            std::cout << YELLOW << cFilename << RESET << std::endl;
+            std::ifstream cFile (cFilename);
+            std::string line;
+
+            if (cFile.is_open() )
+            {
+                while ( std::getline (cFile, line) )
+                {
+                    if (line.empty() )                 // be careful: an empty line might be read
+                        continue;
+                    else if (line.find ("#") == std::string::npos && line.find ("Temperature") == std::string::npos)
+                    {
+                        of << line << std::endl;
+                        std::cout << line << std::endl;
+                    }
+                }
+
+                cFile.close();
+            }
+        }
+
+        of.close();
+    }
+}
+
+float get_temperature (std::string pTFile, long int pTimestamp)
+{
+    float cTemperature = 0;
+    std::ifstream cFile (pTFile);
+
+    if (cFile.is_open() )
+    {
+        long int cTimestamp = 0;
+        float cReadTemperature = 0;
+        std::string cUnit;
+
+        while (!cFile.eof() )
+        {
+            cFile >> cTimestamp >> cReadTemperature >> cUnit;
+
+            //consider it good when within 50 seconds
+            if (fabs (pTimestamp - cTimestamp) < 30)
+            {
+                cTemperature = cReadTemperature;
+                //std::cout << "Found " << cTimestamp << " close to " << pTimestamp << std::endl;
+                break;
+            }
+
+            //else std::cout << BOLDRED << "ERROR, could not find a temperature reading within 30s of the timestamp!" << RESET << std::endl;
+        }
+    }
+    else std::cout  << "ERROR opening temperature file!" << std::endl;
+
+    return cTemperature;
 }
 
 struct timepair
@@ -139,7 +207,36 @@ timepair get_times (std::string pTimefile)
     return cPair;
 }
 
-TGraph* draw_dose (timepair pTimepair, TGraph* pGraph)
+float get_dose (timepair pTimepair, long int pTimestamp)
+{
+    float cDoserate = pTimepair.doserate / 3600;
+    float cDose = 0;
+
+    //first, calculate the accumulated dose until timestamp
+    for (auto cTimepair : pTimepair.timepair)
+    {
+        //the timestamp is greater than the stop of the current period, accumulate
+        if (pTimestamp > cTimepair.second)
+            cDose += cDoserate * (cTimepair.second - cTimepair.first);
+
+        //timestamp is between start and stop: add until timestamp and then stop
+        if (pTimestamp > cTimepair.first && pTimestamp < cTimepair.second)
+        {
+            cDose += cDoserate * (pTimestamp - cTimepair.first);
+            break;
+        }
+
+        //timestamp is smaller than the next start, return present value and stop
+        if (pTimestamp < cTimepair.first) break;
+    }
+
+    TTimeStamp ts (static_cast<time_t> (pTimestamp) );
+    //std::cout << RED << "Dose at: " << pTimestamp << " which is: " << ts.AsString ("lc") << " : " << cDose << " kGy" << RESET << std::endl;
+    return cDose;
+}
+
+
+TGraph* draw_time (timepair pTimepair, TGraph* pGraph)
 {
     //timepair pTimepair = get_times (pTimefile);
     float cDoserate = pTimepair.doserate / 3600.; // 20kGy/h / 3600s
@@ -210,7 +307,9 @@ TGraph* draw_dose (timepair pTimepair, TGraph* pGraph)
     cDoseGraph->SetLineWidth (2);
     cDoseGraph->SetLineColor (2);
 
-    TCanvas* cCanvas = new TCanvas (pGraph->GetTitle(), pGraph->GetTitle() );
+    TString cCanvasName = Form ("%s_%d", pGraph->GetTitle(), gCanvasCounter);
+    gCanvasCounter++;
+    TCanvas* cCanvas = new TCanvas (cCanvasName, cCanvasName);
     cCanvas->cd();
     pGraph->Draw ("AP");
 
@@ -228,11 +327,73 @@ TGraph* draw_dose (timepair pTimepair, TGraph* pGraph)
     return cDoseGraph;
 }
 
-void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias)
+void draw_dose (TGraph* pGraph)
+{
+    TString cCanvasName = Form ("%s_%d", pGraph->GetTitle(), gCanvasCounter);
+    gCanvasCounter++;
+    TCanvas* cCanvas = new TCanvas (cCanvasName, cCanvasName);
+    cCanvas->cd();
+    pGraph->Draw ("AP");
+}
+
+void plot_sweep (std::string pDatadir, timepair pTimepair, std::string pBias)
+{
+    std::set<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ibias", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
+
+    if (cSweeps.find (pBias) == std::end (cSweeps) ) std::cout << BOLDRED << "ERROR: " << pBias << " is not a sweep!" << RESET << std::endl;
+    else
+    {
+
+        TMultiGraph* cGraph = new TMultiGraph();
+        std::vector<std::string> cFileList = list_folders (pDatadir, "Cbc3RadiationCycle.root");
+
+        int cColor = 1;
+
+        for (auto& cFilename : cFileList)
+        {
+            if (cFilename.find ("FULL") != std::string::npos)
+            {
+                TFile* cFile = TFile::Open (cFilename.c_str() );
+                TDirectory* cDir = dynamic_cast< TDirectory* > ( gROOT->FindObject ("FE0CBC0") );
+
+
+                if (cFile != nullptr)
+                {
+                    for (auto cKey : *cDir->GetListOfKeys() )
+                    {
+                        std::string cGraphName = static_cast<std::string> (cKey->GetName() );
+
+                        if (cGraphName.find (pBias) != std::string::npos)
+                        {
+                            TGraph* cTmpGraph;// = static_cast<TGraph*> (cKey->ReadObj() );
+                            cDir->GetObject (cGraphName.c_str(), cTmpGraph);
+                            cTmpGraph->SetLineColor (cColor);
+                            long int cTimestamp = atoi (cGraphName.substr (cGraphName.find ("TS") + 2).c_str() );
+                            cTmpGraph->SetTitle (Form ("%3.0f %s", get_dose (pTimepair, cTimestamp), "kGy" ) );
+                            cGraph->Add (cTmpGraph);
+                            //std::cout << cGraphName << " " << cTimestamp << std::endl;
+                            cColor++;
+                        }
+                    }
+                }
+                else std::cout << BOLDRED << "ERROR, could not open File: " << cFilename << RESET << std::endl;
+            }
+        }
+
+        TString cCanvasName = Form ("%s_%d", pBias.c_str(), gCanvasCounter);
+        gCanvasCounter++;
+        TCanvas* cCanvas = new TCanvas (cCanvasName, cCanvasName);
+        cCanvas->cd();
+        cGraph->Draw ("AL");
+        cCanvas->BuildLegend();
+    }
+}
+
+void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std::string pParameter)
 {
     TGraph* cGraph = new TGraph();
     gROOT->ProcessLine ("#include <vector>");
-    std::vector<std::string> cFileList = list_folders (pDatadir);
+    std::vector<std::string> cFileList = list_folders (pDatadir, "Cbc3RadiationCycle.root");
 
     for (auto& cFilename : cFileList)
     {
@@ -280,7 +441,12 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias)
                         if (*cBias == pBias)
                         {
                             //std::cout << *cBias << " " << cTimestamp << " " << cValue << std::endl;
-                            cGraph->SetPoint (cGraph->GetN(), cTimestamp, cValue);
+                            if (pParameter == "time")
+                                cGraph->SetPoint (cGraph->GetN(), cTimestamp, cValue);
+                            else if (pParameter == "dose")
+                                cGraph->SetPoint (cGraph->GetN(), get_dose (pTimepair, cTimestamp), cValue);
+                            else if (pParameter == "temperature")
+                                cGraph->SetPoint (cGraph->GetN(), get_temperature ("TLog_chip0.txt", cTimestamp), cValue);
                         }
                     }
                 }
@@ -289,15 +455,27 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias)
         }
     }
 
-    cGraph->GetXaxis()->SetTimeDisplay (1);
     cGraph->GetYaxis()->SetTitle (pBias.c_str() );
     cGraph->GetYaxis()->SetTitleOffset (1.25);
-    cGraph->GetXaxis()->SetTitle ("Time");
     cGraph->SetMarkerStyle (8);
     cGraph->SetTitle (pBias.c_str() );
 
-    //TCanvas* c1 = new TCanvas ("c1", "c1");
-    draw_dose (pTimepair, cGraph);
+    if (pParameter == "time")
+    {
+        cGraph->GetXaxis()->SetTimeDisplay (1);
+        cGraph->GetXaxis()->SetTitle ("Time");
+        draw_time (pTimepair, cGraph);
+    }
+    else if (pParameter == "dose")
+    {
+        cGraph->GetXaxis()->SetTitle ("Dose [kGy]");
+        draw_dose (cGraph);
+    }
+    else if (pParameter == "temperature")
+    {
+        cGraph->GetXaxis()->SetTitle ("Temperature [C]");
+        draw_dose (cGraph);
+    }
 }
 
 void analyze()
@@ -307,19 +485,22 @@ void analyze()
     //plot_bias ("Chip1_358kGy", cTimepair, "MinimalPower");
 
     timepair cTimepair = get_times ("timefile_chip0");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "MinimalPower");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "VCth");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBGbias");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "Vpafb");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "VPLUS1");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "VPLUS2");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipre1");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipre2");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipaos");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipsf");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "Icomp");
-    plot_bias ("Data/Chip0_55kGy", cTimepair, "Ihyst");
+    plot_sweep ("Data/Chip0_55kGy", cTimepair, "VCth");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "dose");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "time");
+    plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "temperature");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "MinimalPower", "dose");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "VCth", "time");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "VBGbias");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "Vpafb");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "VPLUS1");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "VPLUS2");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipre1");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipre2");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipaos");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipsf");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "Icomp");
+    //plot_bias ("Data/Chip0_55kGy", cTimepair, "Ihyst");
 }
 // key(BiasSweep, reg name, amux code, bit mask, bit shift
 //fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("none"),   std::make_tuple ("", 0x00, 0x00, 0) ); fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipa"),    std::make_tuple ("Ipa", 0x01, 0xFF, 0) );
