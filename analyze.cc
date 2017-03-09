@@ -211,7 +211,7 @@ float get_dose (timepair pTimepair, long int pTimestamp)
 }
 
 
-TGraph* draw_time (timepair pTimepair, TGraph* pGraph)
+TGraph* draw_time (timepair pTimepair, TGraph* pGraph, int pChipId)
 {
     //timepair pTimepair = get_times (pTimefile);
     float cDoserate = pTimepair.doserate / 3600.; // 20kGy/h / 3600s
@@ -219,15 +219,11 @@ TGraph* draw_time (timepair pTimepair, TGraph* pGraph)
     int cN = pGraph->GetN();
     double* cY = pGraph->GetY();
     double* cX = pGraph->GetX();
-    //int cLocMax = TMath::LocMax (cN, cY);
     float cMaxY = pGraph->GetYaxis()->GetXmax();
-    //float cMaxY = cY[cLocMax];
-    //cLocMax = TMath::LocMin (cN, cY);
     float cMinY = pGraph->GetYaxis()->GetXmin();
     //float cMinY = cY[cLocMax];
     int cLocMax = TMath::LocMax (cN, cX);
     long int cTimestamp = cX[cLocMax];
-    //long int cTimestamp = pGraph->GetXaxis()->GetXmax();
 
 
     //then, fill the dose graph
@@ -273,19 +269,47 @@ TGraph* draw_time (timepair pTimepair, TGraph* pGraph)
     cN = cDoseGraph->GetN();
     cY = cDoseGraph->GetY();
 
+    //scaling and filling temperature graph
     for (int i = 0; i < cN; i++)
         cY[i] = cY[i] * cScaleFactor + cMinY;
+
+    //now go through the graph, get the xvalues=timestamps
+    //calculate the temperature for the timestamps and fill a dedicated temperature graph that I draw ina special pad
+    cN = pGraph->GetN();
+    cX = pGraph->GetX();
+    Double_t y[cN];
+
+    //scaling and filling temperature graph
+    for (int i = 0; i < cN; i++)
+        y[i] = get_temperature (Form ("TLog_chip%1d.txt", pChipId), cX[i]);
+
+    TGraph* cTemperatureGraph = new TGraph (cN, cX, y);
+    cTemperatureGraph->GetXaxis()->SetTimeDisplay (1);
+    cTemperatureGraph->SetMarkerColor (4);
+    //cTemperatureGraph->SetMarkerSize (4);
+    cTemperatureGraph->SetMarkerStyle (2);
+    cTemperatureGraph->GetYaxis()->SetTitle ("Temperature [C]");
+    cTemperatureGraph->GetYaxis()->SetLabelSize (0.1);
+    cTemperatureGraph->GetXaxis()->SetLabelSize (0.12);
+    cTemperatureGraph->GetYaxis()->SetTitleSize (0.12);
+    cTemperatureGraph->GetYaxis()->SetTitleOffset (0.3);
 
 
     //plot
     cDoseGraph->GetXaxis()->SetTimeDisplay (1);
+
     cDoseGraph->SetLineWidth (2);
     cDoseGraph->SetLineColor (2);
 
     TString cCanvasName = Form ("%s_%d", pGraph->GetTitle(), gCanvasCounter);
     gCanvasCounter++;
     TCanvas* cCanvas = new TCanvas (cCanvasName, cCanvasName);
-    cCanvas->cd();
+    TPad* lowerPad = new TPad ("lowerPad", "lowerPad", .005, .005, .995, .2475);
+    lowerPad->Draw();
+    TPad* upperPad = new TPad ("upperPad", "upperPad", .005, .2525, .995, .995);
+    upperPad->Draw();
+
+    upperPad->cd();
     pGraph->Draw ("AP");
 
     TGaxis* cAxis = new TGaxis (pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmax(), 0, cMaxDose, 510, "+L");
@@ -296,6 +320,9 @@ TGraph* draw_time (timepair pTimepair, TGraph* pGraph)
     cAxis->SetTitleColor (2);
 
     cDoseGraph->Draw ("PL same");
+
+    lowerPad->cd();
+    cTemperatureGraph->Draw ("AP");
     cCanvas->Modified();
     cCanvas->Update();
 
@@ -377,7 +404,7 @@ void plot_pedenoise (std::string pDatadir, timepair pTimepair, std::string pHist
     {
         cGraph->GetXaxis()->SetTimeDisplay (1);
         cGraph->GetXaxis()->SetTitle ("Time");
-        draw_time (pTimepair, cGraph);
+        draw_time (pTimepair, cGraph, cChipId);
     }
     else if (pParameter == "dose")
     {
@@ -521,7 +548,7 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
     {
         cGraph->GetXaxis()->SetTimeDisplay (1);
         cGraph->GetXaxis()->SetTitle ("Time");
-        draw_time (pTimepair, cGraph);
+        draw_time (pTimepair, cGraph, cChipId);
     }
     else if (pParameter == "dose")
     {
