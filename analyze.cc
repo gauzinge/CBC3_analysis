@@ -22,35 +22,6 @@
 
 int gCanvasCounter = 0;
 
-//class BiasSweepData : public TObject
-//{
-//public:
-//uint16_t fFeId;
-//uint16_t fCbcId;
-//std::string fBias;
-//long int fTimestamp;
-//char fUnit[2];
-//uint16_t fInitialXValue;
-//float fInitialYValue;
-//std::vector<uint16_t> fXValues;
-//std::vector<float> fYValues;
-
-//BiasSweepData() : fFeId (0), fCbcId (0), fBias (""), fTimestamp (0)
-//{
-//}
-//~BiasSweepData() {}
-//cTree->Branch ("Bias", &fData->fBias);
-//cTree->Branch ("Fe", &fData->fFeId, "Fe/s" );
-//cTree->Branch ("Cbc", &fData->fCbcId, "Cbc/s" );
-//cTree->Branch ("Time", &fData->fTimestamp, "Time/l" );
-//cTree->Branch ("Unit", &fData->fUnit, "Unit/C" );
-//cTree->Branch ("InitialBiasValue", &fData->fInitialXValue, "InitialDAC/s");
-//cTree->Branch ("InitialDMMValue", &fData->fInitialYValue, "InitialDMM/F");
-//cTree->Branch ("BiasValues", &fData->fXValues);
-//cTree->Branch ("DMMValues", &fData->fYValues);
-
-//};
-
 std::vector<std::string> list_folders (std::string pDirectory, std::string pFilename)
 {
     std::vector<std::string> cFilelist;
@@ -77,9 +48,13 @@ std::vector<std::string> list_folders (std::string pDirectory, std::string pFile
     return cFilelist;
 }
 
-void merge_files (std::string pDatadir, std::string pOutfile)
+void merge_files (std::string pDatadir, std::string pOutfile, bool pTemperature = true)
 {
-    std::vector<std::string> cFileList = list_folders (pDatadir, "Temperature_log.txt");
+    std::vector<std::string> cFileList;
+
+    if (pTemperature) cFileList = list_folders (pDatadir, "Temperature_log.txt");
+    else cFileList = list_folders (pDatadir, "Current_log.txt");
+
     std::ofstream of (pOutfile);
 
     if (of.is_open() )
@@ -96,7 +71,7 @@ void merge_files (std::string pDatadir, std::string pOutfile)
                 {
                     if (line.empty() )                 // be careful: an empty line might be read
                         continue;
-                    else if (line.find ("#") == std::string::npos && line.find ("Temperature") == std::string::npos)
+                    else if (line.find ("#") == std::string::npos && line.find ("Temperature") == std::string::npos && line.find ("Logfile") == std::string::npos)
                     {
                         of << line << std::endl;
                         std::cout << line << std::endl;
@@ -336,6 +311,86 @@ void draw_dose (TGraph* pGraph)
     pGraph->Draw ("AP");
 }
 
+void plot_pedenoise (std::string pDatadir, timepair pTimepair, std::string pHistName, std::string pParameter)
+{
+    int cChipId = atoi (pDatadir.substr (pDatadir.find ("_") - 1, 1).c_str() );
+    std::cout << pDatadir << " Chip id extracted " << cChipId << std::endl;
+    TGraph* cGraph = new TGraph();
+    std::vector<std::string> cFileList = list_folders (pDatadir, "Cbc3RadiationCycle.root");
+
+    if (pHistName == "Pedestal") pHistName = "Fe0CBC0_Pedestal";
+    else if (pHistName == "Noise") pHistName = "Fe0CBC0_Noise";
+
+    for (auto& cFilename : cFileList)
+    {
+        //if (cFilename.find ("FULL") != std::string::npos)
+        //{
+        TFile* cFile = TFile::Open (cFilename.c_str() );
+        TDirectory* cDir = dynamic_cast< TDirectory* > ( gROOT->FindObject ("FE0CBC0") );
+
+
+        if (cFile != nullptr)
+        {
+            for (auto cKey : *cDir->GetListOfKeys() )
+            {
+                std::string cGraphName = static_cast<std::string> (cKey->GetName() );
+
+                //if (cGraphName.find (pHistName ) != std::string::npos)
+                if (cGraphName == pHistName)
+                {
+                    TH1F* cTmpHist;// = static_cast<TGraph*> (cKey->ReadObj() );
+                    cDir->GetObject (cGraphName.c_str(), cTmpHist);
+                    //here need to parse the directory name
+                    std::string cTimestring = cFilename.substr (cFilename.find (":") - 11, 14);
+                    //std::cout << cTimestring << std::endl;
+                    //int year = 2017;
+                    int day = atoi (cTimestring.substr (0, 2).c_str() ); //07-03-17_09:50
+                    int month = atoi (cTimestring.substr (3, 2).c_str() ); //07-03-17_09:50
+                    int year = atoi (cTimestring.substr (6, 2).c_str() ); //07-03-17_09:50
+                    int hour = atoi (cTimestring.substr (9, 2).c_str() ); //07-03-17_09:50
+                    int minute = atoi (cTimestring.substr (12, 2).c_str() ); //07-03-17_09:50
+                    TTimeStamp ts (year, month, day, hour - 1, minute, 0);
+                    //std::cout << year << " " << month << " " << day << " " << hour << " " << minute << " ts " << ts.GetSec() << std::endl;
+                    long int cTimestamp = static_cast<long int> (ts.GetSec() );
+                    std::cout << cGraphName << " " << cKey->GetName() << std::endl;
+
+                    if (pParameter == "time")
+                        cGraph->SetPoint (cGraph->GetN(), cTimestamp, cTmpHist->GetMean() );
+                    else if (pParameter == "dose")
+                        cGraph->SetPoint (cGraph->GetN(), get_dose (pTimepair, cTimestamp), cTmpHist->GetMean() );
+                    else if (pParameter == "temperature")
+                        cGraph->SetPoint (cGraph->GetN(), get_temperature (Form ("TLog_chip%1d.txt", cChipId), cTimestamp), cTmpHist->GetMean() );
+                }
+            }
+        }
+        else std::cout << BOLDRED << "ERROR, could not open File: " << cFilename << RESET << std::endl;
+
+        //}
+    }
+
+    cGraph->GetYaxis()->SetTitle (pHistName.c_str() );
+    cGraph->GetYaxis()->SetTitleOffset (1.25);
+    cGraph->SetMarkerStyle (8);
+    cGraph->SetTitle (pHistName.c_str() );
+
+    if (pParameter == "time")
+    {
+        cGraph->GetXaxis()->SetTimeDisplay (1);
+        cGraph->GetXaxis()->SetTitle ("Time");
+        draw_time (pTimepair, cGraph);
+    }
+    else if (pParameter == "dose")
+    {
+        cGraph->GetXaxis()->SetTitle ("Dose [kGy]");
+        draw_dose (cGraph);
+    }
+    else if (pParameter == "temperature")
+    {
+        cGraph->GetXaxis()->SetTitle ("Temperature [C]");
+        draw_dose (cGraph);
+    }
+}
+
 void plot_sweep (std::string pDatadir, timepair pTimepair, std::string pBias)
 {
     std::set<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ibias", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
@@ -391,6 +446,8 @@ void plot_sweep (std::string pDatadir, timepair pTimepair, std::string pBias)
 
 void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std::string pParameter)
 {
+    int cChipId = atoi (pDatadir.substr (pDatadir.find ("_") - 1, 1).c_str() );
+    std::cout << pDatadir << " Chip id extracted " << cChipId << std::endl;
     TGraph* cGraph = new TGraph();
     gROOT->ProcessLine ("#include <vector>");
     std::vector<std::string> cFileList = list_folders (pDatadir, "Cbc3RadiationCycle.root");
@@ -446,7 +503,7 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
                             else if (pParameter == "dose")
                                 cGraph->SetPoint (cGraph->GetN(), get_dose (pTimepair, cTimestamp), cValue);
                             else if (pParameter == "temperature")
-                                cGraph->SetPoint (cGraph->GetN(), get_temperature ("TLog_chip0.txt", cTimestamp), cValue);
+                                cGraph->SetPoint (cGraph->GetN(), get_temperature (Form ("TLog_chip%1d.txt", cChipId), cTimestamp), cValue);
                         }
                     }
                 }
@@ -485,8 +542,8 @@ void analyze()
     //plot_bias ("Chip1_358kGy", cTimepair, "MinimalPower");
 
     timepair cTimepair = get_times ("timefile_chip0");
-    plot_sweep ("Data/Chip0_55kGy", cTimepair, "Ipre1");
-    plot_sweep ("Data/Chip0_55kGy", cTimepair, "Ipa");
+    //plot_sweep ("Data/Chip0_55kGy", cTimepair, "Ipre1");
+    //plot_sweep ("Data/Chip0_55kGy", cTimepair, "Ipa");
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "dose");
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "time");
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "VBG_LDO", "temperature");
@@ -502,24 +559,7 @@ void analyze()
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "Ipsf");
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "Icomp");
     //plot_bias ("Data/Chip0_55kGy", cTimepair, "Ihyst");
+    plot_pedenoise ("Data/Chip0_55kGy", cTimepair, "Pedestal", "time");
+    plot_pedenoise ("Data/Chip0_55kGy", cTimepair, "Noise", "time");
 }
-// key(BiasSweep, reg name, amux code, bit mask, bit shift
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("none"),   std::make_tuple ("", 0x00, 0x00, 0) ); fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipa"),    std::make_tuple ("Ipa", 0x01, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipre2"),  std::make_tuple ("Ipre2", 0x02, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("CAL_I"),  std::make_tuple ("CALIbias", 0x03, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ibias"),  std::make_tuple ("Ibias", 0x04, 0x00, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VCth"),    std::make_tuple ("", 0x05, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VBGbias"), std::make_tuple ("BandgapFuse", 0x06, 0x3F, 0) );//read this on the VDDA line?
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VBG_LDO"), std::make_tuple ("", 0x07, 0x00, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Vpafb"),  std::make_tuple ("", 0x08, 0x00, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Nc50"),   std::make_tuple ("", 0x09, 0x00, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipre1"),  std::make_tuple ("Ipre1", 0x0A, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipsf"),   std::make_tuple ("Ipsf", 0x0B, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ipaos"),  std::make_tuple ("Ipaos", 0x0C, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Icomp"),  std::make_tuple ("Icomp", 0x0D, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("Ihyst"),  std::make_tuple ("FeCtrl&TrgLat2", 0x0E, 0x3C, 2) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("CAL_Vcasc"), std::make_tuple ("CALVcasc", 0x0F, 0xFF, 0) );
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VPLUS2"), std::make_tuple ("Vplus1&2", 0x10, 0xF0, 4) ) ;
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VPLUS1"), std::make_tuple ("Vplus1&2", 0x11, 0x0F, 0) ) ;
-//fAmuxSettings.emplace (std::piecewise_construct, std::make_tuple ("VDDA"), std::make_tuple ("", 0x00, 0x00, 0) ) ;
 #endif
