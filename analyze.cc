@@ -202,7 +202,11 @@ timepair get_times (std::string pTimefile)
                         std::cout << RED << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstop.GetSec() << " in UTC" << RESET << std::endl;
 
                     }
-                    else std::cout << "ERROR in the file format" << std::endl;
+                    else
+                    {
+                        tmppair.second = 0;
+                        std::cout << "ERROR in the file format  or no stop specified" << std::endl;
+                    }
                 }
                 else if (cTimefile.eof() )
                     tmppair.second = 0;
@@ -455,7 +459,7 @@ void plot_pedenoise (std::string pDatadir, timepair pTimepair, std::string pHist
         TDirectory* cDir = dynamic_cast< TDirectory* > ( gROOT->FindObject ("FE0CBC0") );
 
 
-        if (cFile != nullptr)
+        if (cFile != nullptr && cDir != nullptr)
         {
             for (auto cKey : *cDir->GetListOfKeys() )
             {
@@ -542,7 +546,7 @@ void plot_sweep (std::string pDatadir, timepair pTimepair, std::string pBias)
                 TDirectory* cDir = dynamic_cast< TDirectory* > ( gROOT->FindObject ("FE0CBC0") );
 
 
-                if (cFile != nullptr)
+                if (cFile != nullptr && cDir != nullptr)
                 {
                     for (auto cKey : *cDir->GetListOfKeys() )
                     {
@@ -673,8 +677,8 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
 
 void analyze()
 {
-    std::string cTimefile = "timefile_chip0";
-    std::string cDatadir = "Data/Chip0_55kGy";
+    std::string cTimefile = "timefile_chip2";
+    std::string cDatadir = "Data/Chip2_xxxkGy";
     timepair cTimepair = get_times (cTimefile);
     //plot_sweep (cDatadir, cTimepair, "Ipa");
     //plot_bias (cDatadir, cTimepair, "VBG_LDO", "time");
@@ -692,7 +696,7 @@ void analyze()
     //plot_bias (cDatadir, cTimepair, "Icomp");
     //plot_bias (cDatadir, cTimepair, "Ihyst");
     plot_bias (cDatadir, cTimepair, "VBG_LDO", "time");
-    plot_sweep (cDatadir, cTimepair, "Ipre1");
+    //plot_sweep (cDatadir, cTimepair, "Ipre1");
     plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
     plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
     plot_lv (cDatadir, cTimepair, 4, 'I');
