@@ -57,6 +57,7 @@ std::vector<std::string> list_folders (std::string pDirectory, std::string pFile
     }
 
     closedir (dir);
+    std::sort (cFilelist.begin(), cFilelist.end() );
     return cFilelist;
 }
 
@@ -151,6 +152,21 @@ TGraph* get_temperatureGraph (std::string pTFile)
     else std::cout  << "ERROR opening temperature file!" << std::endl;
 
     return cGraph;
+}
+
+void format_temperatureGraph (TGraph* cGraph)
+{
+    cGraph->SetTitle ("");
+    cGraph->GetYaxis()->SetNdivisions (010, kTRUE);
+    format_timeaxis (cGraph);
+    cGraph->SetMarkerColor (4);
+    cGraph->SetMarkerSize (.4);
+    cGraph->SetMarkerStyle (2);
+    cGraph->GetYaxis()->SetTitle ("Temperature [C]");
+    cGraph->GetYaxis()->SetLabelSize (0.1);
+    cGraph->GetXaxis()->SetLabelSize (0.12);
+    cGraph->GetYaxis()->SetTitleSize (0.12);
+    cGraph->GetYaxis()->SetTitleOffset (0.3);
 }
 
 struct timepair
@@ -251,6 +267,45 @@ float get_dose (timepair pTimepair, long int pTimestamp)
     return cDose;
 }
 
+TGraph* get_dosegraph (timepair pTimepair, long int pTimestamp_last)
+{
+    //then, fill the dose graph
+    TGraph* cDoseGraph = new TGraph();
+    float cDoserate = pTimepair.doserate / 3600.; // 20kGy/h / 3600s
+    float cDose = 0;
+    long int cMaxDoseTime = 0;
+
+    for (auto cTimepair : pTimepair.timepair)
+    {
+        cDoseGraph->SetPoint (cDoseGraph->GetN(), cTimepair.first, cDose);
+
+        //both start and end were earlier than the last point in the graph
+        if (cTimepair.second != 0 && pTimestamp_last > cTimepair.second)
+        {
+            cDose += cDoserate * (cTimepair.second - cTimepair.first);
+            cDoseGraph->SetPoint (cDoseGraph->GetN(), cTimepair.second, cDose);
+            cMaxDoseTime = cTimepair.second;
+        }
+        //  end is later than the last point in the graph
+        //  set the last point to the dose at timestamp
+        else if (cTimepair.second != 0 && pTimestamp_last < cTimepair.second)
+        {
+            cDose += cDoserate * (pTimestamp_last - cTimepair.first);
+            cDoseGraph->SetPoint (cDoseGraph->GetN(), pTimestamp_last, cDose);
+            cMaxDoseTime = pTimestamp_last;
+        }
+        //there is no end and thus the last point in the graph is the latest
+        else if (cTimepair.second == 0 && pTimestamp_last > cTimepair.first )
+        {
+            cDose += (pTimestamp_last - cTimepair.first) * cDoserate;
+            cDoseGraph->SetPoint (cDoseGraph->GetN(), pTimestamp_last, cDose);
+            cMaxDoseTime = pTimestamp_last;
+        }
+    }
+
+    return cDoseGraph;
+}
+
 
 TGraph* draw_time (timepair pTimepair, TGraph* pGraph, int pChipId)
 {
@@ -333,23 +388,14 @@ TGraph* draw_time (timepair pTimepair, TGraph* pGraph, int pChipId)
             y[i] = get_temperature (Form ("TLog_chip%1d.txt", pChipId), cX[i]);
 
         cTemperatureGraph = new TGraph (cN, cX, y);
+        format_temperatureGraph (cTemperatureGraph);
     }
     // I'm plotting the LV data, so get the whole T history
     else
+    {
         cTemperatureGraph = get_temperatureGraph (Form ("TLog_chip%1d.txt", pChipId) );
-
-    cTemperatureGraph->SetTitle ("");
-    cTemperatureGraph->GetYaxis()->SetNdivisions (010, kTRUE);
-    format_timeaxis (cTemperatureGraph);
-    cTemperatureGraph->SetMarkerColor (4);
-    cTemperatureGraph->SetMarkerSize (.4);
-    cTemperatureGraph->SetMarkerStyle (2);
-    cTemperatureGraph->GetYaxis()->SetTitle ("Temperature [C]");
-    cTemperatureGraph->GetYaxis()->SetLabelSize (0.1);
-    cTemperatureGraph->GetXaxis()->SetLabelSize (0.12);
-    cTemperatureGraph->GetYaxis()->SetTitleSize (0.12);
-    cTemperatureGraph->GetYaxis()->SetTitleOffset (0.3);
-
+        format_temperatureGraph (cTemperatureGraph);
+    }
 
     //plot
     format_timeaxis (cDoseGraph);
@@ -440,6 +486,180 @@ void plot_lv (std::string pDatadir, timepair pTimepair, int pChannel, char pUnit
     draw_time (pTimepair, cGraph, cChipId);
 }
 
+long int extract_timesamp (std::string pFilename)
+{
+    std::string cTimestring = pFilename.substr (pFilename.find (":") - 11, 14);
+    int day = atoi (cTimestring.substr (0, 2).c_str() ); //07-03-17_09:50
+    int month = atoi (cTimestring.substr (3, 2).c_str() ); //07-03-17_09:50
+    int year = atoi (cTimestring.substr (6, 2).c_str() ); //07-03-17_09:50
+    int hour = atoi (cTimestring.substr (9, 2).c_str() ); //07-03-17_09:50
+    int minute = atoi (cTimestring.substr (12, 2).c_str() ); //07-03-17_09:50
+    TTimeStamp ts (year, month, day, hour - 1, minute, 0);
+    long int cTimestamp = static_cast<long int> (ts.GetSec() );
+    return cTimestamp;
+}
+
+double MyErf ( double* x, double* par )
+{
+    double x0 = par[0];
+    double width = par[1];
+    double fitval ( 0 );
+
+    // if ( x[0] < x0 ) fitval = 0.5 * TMath::Erfc( ( x0 - x[0] ) / width );
+    // else fitval = 0.5 + 0.5 * TMath::Erf( ( x[0] - x0 ) / width );
+    if ( x[0] < x0 ) fitval = 0.5 * erfc ( ( x0 - x[0] ) / width );
+    else fitval = 0.5 + 0.5 * erf ( ( x[0] - x0 ) / width );
+
+    return fitval;
+}
+
+TF1* fit_scurve (TH1F* pScurve)
+{
+    gStyle->SetOptFit (0111);
+    gStyle->SetOptStat (0000000000);
+    //get the midpoint and width estimates for parameter start values
+    double cStart = pScurve->GetBinCenter (pScurve->FindFirstBinAbove (0) );
+    double cStop = pScurve->GetBinCenter (pScurve->FindFirstBinAbove (0.99) );
+    double cMid = (cStop + cStart) * .5;
+    double cWidth = (cStop - cStart) * .5;
+    //std::cout << YELLOW << "Estimates: Start: " << cStart << " Stop: " << cStop << " Mid: " << cMid << " Width: " << cWidth << RESET <<  std::endl;
+
+    //fitting function using error function
+    TF1* cFit = new TF1 ("SCurveFit", MyErf, cStart - 10, cStop + 10, 2);
+
+    cFit->SetParName (0, "Pedestal");
+    cFit->SetParName (1, "Noise");
+    cFit->SetParameter (0, cMid);
+    cFit->SetParameter (1, cWidth);
+
+    pScurve->Fit (cFit, "RNQ+");
+
+    //std::cout << BLUE << "Reusults: Midpoint: " << cFit->GetParameter (0) << " Width: " << cFit->GetParameter (1) << " Chi^2/NDF: " << cFit->GetChisquare() / cFit->GetNDF() << RESET << std::endl;
+
+    return cFit;
+}
+
+void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  = 0 )
+{
+    //temporary for testing
+    int cCounter = 0;
+
+    std::cout << BOLDBLUE << "Plotting SCurves with TP Amplitude " << pTPAmplitude << " in data directory: " << pDatadir  << RESET << std::endl;
+    int cChipId = atoi (pDatadir.substr (pDatadir.find ("_") - 1, 1).c_str() );
+    std::cout << pDatadir << " Chip id extracted " << cChipId << std::endl;
+    std::vector<std::string> cFileList = list_folders (pDatadir, "Cbc3RadiationCycle.root");
+    int cNFiles = cFileList.size();
+
+    // get the individual time stamps of the measurements and sort them
+    std::vector<long int> cTSvector;
+
+    for (auto& cFilename : cFileList)
+        cTSvector.push_back (extract_timesamp (cFilename) );
+
+    std::sort (cTSvector.begin(), cTSvector.end() );
+    long int cBegin = *cTSvector.begin();
+    long int cEnd = cTSvector.back();
+
+    TH2F* cPedestal = new TH2F ("Pedestals", "Pedestals", cNFiles, cBegin, cEnd, 254, -.5, 253.5);
+    TH2F* cNoise = new TH2F ("Noise", "Noise", cNFiles, cBegin, cEnd, 254, -.5, 253.5);
+
+    std::string pHistName = Form ("SCurves%d", pTPAmplitude);
+
+    int cScurveCounter = 0;
+    double cMeanPedestal = 0;
+
+    for (auto& cFilename : cFileList)
+    {
+        //if (cCounter == 25) break;
+
+        TFile* cFile = TFile::Open (cFilename.c_str() );
+        TDirectory* cDir = dynamic_cast< TDirectory* > ( gROOT->FindObject (pHistName.c_str() ) );
+
+        if (cFile != nullptr && cDir != nullptr)
+        {
+            for (auto cKey : *cDir->GetListOfKeys() )
+            {
+                std::string cGraphName = static_cast<std::string> (cKey->GetName() );
+
+                long int cTimestamp = extract_timesamp (cFilename);
+
+                //find only SCurves, not derivatives
+                if (cGraphName.find ("Scurve_") != std::string::npos)
+                {
+                    int cChannel = atoi (cGraphName.substr (cGraphName.find ("Channel") + 7, 3 ).c_str() );
+                    TH1F* cTmpHist;// = static_cast<TGraph*> (cKey->ReadObj() );
+                    cDir->GetObject (cGraphName.c_str(), cTmpHist);
+                    //here need to parse the directory name
+                    //std::cout << cGraphName << " " << cKey->GetName() << std::endl;
+
+                    TF1* cFit = fit_scurve (cTmpHist);
+                    cPedestal->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (0) );
+                    cNoise->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (1) );
+                    cMeanPedestal += cFit->GetParameter (0);
+                    cScurveCounter++;
+                }
+            }
+        }
+        else std::cout << BOLDRED << "ERROR, could not open File: " << cFilename << RESET << std::endl;
+
+        cCounter++;
+        std::cout << "Done with File " << cCounter << " out of " << cNFiles << std::endl;
+    }
+
+    cMeanPedestal /= cScurveCounter;
+
+    TGraph* cTempGraph = get_temperatureGraph (Form ("TLog_chip%1d.txt", cChipId) );
+    format_temperatureGraph (cTempGraph);
+
+    //then, fill the dose graph
+    TGraph* cDoseGraph = get_dosegraph (pTimepair, cEnd);
+
+    format_timeaxis (cDoseGraph);
+    cDoseGraph->SetTitle ("");
+    cDoseGraph->GetYaxis()->SetNdivisions (010, kTRUE);
+    cDoseGraph->SetLineWidth (2);
+    cDoseGraph->SetLineColor (2);
+    cDoseGraph->GetYaxis()->SetTitle ("Dose [kGy]");
+    cDoseGraph->GetYaxis()->SetLabelSize (0.1);
+    cDoseGraph->GetXaxis()->SetLabelSize (0.12);
+    cDoseGraph->GetYaxis()->SetTitleSize (0.12);
+    cDoseGraph->GetYaxis()->SetTitleOffset (0.3);
+
+
+    TString cCanvasName = Form ("%s_%d", "SCurve Parameters", gCanvasCounter);
+    gCanvasCounter++;
+    TCanvas* cCanvas = new TCanvas (cCanvasName, cCanvasName, 800, 1200);
+    TPad* lowestpad = new TPad ("lowestpad", "lowestpad", .005, .005, .995, .1500);
+    lowestpad->Draw();
+    TPad* lowerpad = new TPad ("lowerpad", "lowerpad", .005, .1505, .995, .3000);
+    lowerpad->Draw();
+    TPad* middlePad = new TPad ("middlePad", "middlePad", .005, .3005, .995, .6400);
+    middlePad->Draw();
+    TPad* upperPad = new TPad ("upperPad", "upperPad", .005, .6405, .995, .9905);
+    upperPad->Draw();
+
+    lowestpad->cd();
+    cTempGraph->Draw ("AP");
+    cTempGraph->GetXaxis()->SetRangeUser (cBegin, cEnd);
+    lowerpad->cd();
+    cDoseGraph->Draw ("APL");
+    cDoseGraph->GetXaxis()->SetRangeUser (cBegin, cEnd);
+    cCanvas->Modified();
+    cCanvas->Update();
+    cPedestal->GetXaxis()->SetTimeDisplay (1);
+    cNoise->GetXaxis()->SetTimeDisplay (1);
+    cPedestal->GetZaxis()->SetRangeUser (cMeanPedestal - 10, cMeanPedestal + 10);
+    cNoise->GetZaxis()->SetRangeUser (0.5, 2.5);
+    cPedestal->GetXaxis()->SetTitle ("Time");
+    cNoise->GetXaxis()->SetTitle ("Time");
+    cPedestal->GetYaxis()->SetTitle ("Channel");
+    cNoise->GetYaxis()->SetTitle ("Channel");
+    middlePad->cd();
+    cPedestal->Draw ("colz");
+    upperPad->cd();
+    cNoise->Draw ("colz");
+}
+
 void plot_pedenoise (std::string pDatadir, timepair pTimepair, std::string pHistName, std::string pParameter)
 {
     std::cout << BOLDBLUE << "Plotting " << pHistName << " in data directory: " << pDatadir  << " against " << pParameter << RESET << std::endl;
@@ -470,15 +690,7 @@ void plot_pedenoise (std::string pDatadir, timepair pTimepair, std::string pHist
                 {
                     TH1F* cTmpHist;// = static_cast<TGraph*> (cKey->ReadObj() );
                     cDir->GetObject (cGraphName.c_str(), cTmpHist);
-                    //here need to parse the directory name
-                    std::string cTimestring = cFilename.substr (cFilename.find (":") - 11, 14);
-                    int day = atoi (cTimestring.substr (0, 2).c_str() ); //07-03-17_09:50
-                    int month = atoi (cTimestring.substr (3, 2).c_str() ); //07-03-17_09:50
-                    int year = atoi (cTimestring.substr (6, 2).c_str() ); //07-03-17_09:50
-                    int hour = atoi (cTimestring.substr (9, 2).c_str() ); //07-03-17_09:50
-                    int minute = atoi (cTimestring.substr (12, 2).c_str() ); //07-03-17_09:50
-                    TTimeStamp ts (year, month, day, hour - 1, minute, 0);
-                    long int cTimestamp = static_cast<long int> (ts.GetSec() );
+                    long int cTimestamp = extract_timesamp (cFilename);
                     //std::cout << cGraphName << " " << cKey->GetName() << std::endl;
 
                     if (pParameter == "time")
@@ -670,6 +882,7 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
     }
     else if (pParameter == "temperature")
     {
+        //here i use draw_dose as this just plots the graph in it's own canvas
         cGraph->GetXaxis()->SetTitle ("Temperature [C]");
         draw_dose (cGraph);
     }
@@ -677,13 +890,11 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
 
 void analyze()
 {
-    std::string cTimefile = "timefile_chip2";
-    std::string cDatadir = "Data/Chip2_xxxkGy";
+    std::string cTimefile = "timefile_chip3";
+    std::string cDatadir = "Data/Chip3_75kGy";
     timepair cTimepair = get_times (cTimefile);
     //plot_sweep (cDatadir, cTimepair, "Ipa");
-    //plot_bias (cDatadir, cTimepair, "VBG_LDO", "time");
     //plot_bias (cDatadir, cTimepair, "VBG_LDO", "temperature");
-    //plot_bias (cDatadir, cTimepair, "MinimalPower", "dose");
     //plot_bias (cDatadir, cTimepair, "VCth", "time");
     //plot_bias (cDatadir, cTimepair, "VBGbias");
     //plot_bias (cDatadir, cTimepair, "Vpafb");
@@ -695,10 +906,11 @@ void analyze()
     //plot_bias (cDatadir, cTimepair, "Ipsf");
     //plot_bias (cDatadir, cTimepair, "Icomp");
     //plot_bias (cDatadir, cTimepair, "Ihyst");
-    plot_bias (cDatadir, cTimepair, "VBG_LDO", "time");
-    //plot_sweep (cDatadir, cTimepair, "Ipre1");
-    plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
-    plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
-    plot_lv (cDatadir, cTimepair, 4, 'I');
+    //plot_bias (cDatadir, cTimepair, "VBG_LDO", "time");
+    //plot_bias (cDatadir, cTimepair, "MinimalPower", "time");
+    //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
+    //plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
+    //plot_lv (cDatadir, cTimepair, 4, 'I');
+    plot_scurves (cDatadir,  cTimepair, 0);
 }
 #endif
