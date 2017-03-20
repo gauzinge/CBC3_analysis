@@ -267,13 +267,15 @@ float get_dose (timepair pTimepair, long int pTimestamp)
     return cDose;
 }
 
-TGraph* get_dosegraph (timepair pTimepair, long int pTimestamp_last)
+TGraph* get_dosegraph (timepair pTimepair, long int pTimestamp_first, long int pTimestamp_last)
 {
     //then, fill the dose graph
     TGraph* cDoseGraph = new TGraph();
     float cDoserate = pTimepair.doserate / 3600.; // 20kGy/h / 3600s
     float cDose = 0;
     long int cMaxDoseTime = 0;
+
+    cDoseGraph->SetPoint (cDoseGraph->GetN(), pTimestamp_first, 0);
 
     for (auto cTimepair : pTimepair.timepair)
     {
@@ -302,6 +304,8 @@ TGraph* get_dosegraph (timepair pTimepair, long int pTimestamp_last)
             cMaxDoseTime = pTimestamp_last;
         }
     }
+
+    cDoseGraph->SetPoint (cDoseGraph->GetN(), pTimestamp_last, cDose);
 
     return cDoseGraph;
 }
@@ -630,7 +634,7 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
     format_temperatureGraph (cTempGraph);
 
     //then, fill the dose graph
-    TGraph* cDoseGraph = get_dosegraph (pTimepair, cEnd);
+    TGraph* cDoseGraph = get_dosegraph (pTimepair, cBegin, cEnd);
 
     format_timeaxis (cDoseGraph);
     cDoseGraph->SetTitle ("");
@@ -659,9 +663,11 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
     lowestpad->cd();
     cTempGraph->Draw ("AP");
     cTempGraph->GetXaxis()->SetRangeUser (cBegin, cEnd);
+    cTempGraph->Draw ("AP");
     lowerpad->cd();
     cDoseGraph->Draw ("APL");
     cDoseGraph->GetXaxis()->SetRangeUser (cBegin, cEnd);
+    cDoseGraph->Draw ("APL");
     cCanvas->Modified();
     cCanvas->Update();
     cPedestal->GetXaxis()->SetTimeDisplay (1);
@@ -673,8 +679,14 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
     cPedestal->GetYaxis()->SetTitle ("Channel");
     cNoise->GetYaxis()->SetTitle ("Channel");
     middlePad->cd();
+    //TH1D* cProjX = cPedestal->ProjectionX ("px", 112, 112);
+    //cProjX->GetXaxis()->SetTimeDisplay (1);
+    //cProjX->Draw();
     cPedestal->Draw ("colz");
     upperPad->cd();
+    //TH1D* cProjXNoise = cNoise->ProjectionX ("pxNoise", 112, 112);
+    //cProjXNoise->GetXaxis()->SetTimeDisplay (1);
+    //cProjXNoise->Draw();
     cNoise->Draw ("colz");
 }
 
@@ -908,8 +920,8 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
 
 void analyze()
 {
-    std::string cTimefile = "timefile_chip0";
-    std::string cDatadir = "Data/Chip0_55kGy";
+    std::string cTimefile = "timefile_chip3";
+    std::string cDatadir = "Data/Chip3_75kGy";
     timepair cTimepair = get_times (cTimefile);
     //plot_sweep (cDatadir, cTimepair, "Ipa");
     //plot_bias (cDatadir, cTimepair, "VBG_LDO", "temperature");
@@ -926,9 +938,9 @@ void analyze()
     //plot_bias (cDatadir, cTimepair, "Ihyst");
     //plot_bias (cDatadir, cTimepair, "VBG_LDO", "time");
     //plot_bias (cDatadir, cTimepair, "MinimalPower", "time");
-    //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
-    //plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
+    //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "temperature");
+    //plot_pedenoise (cDatadir, cTimepair, "Noise", "temperature");
     //plot_lv (cDatadir, cTimepair, 4, 'I');
-    plot_scurves (cDatadir,  cTimepair, 225);
+    plot_scurves (cDatadir,  cTimepair, 0);
 }
 #endif
