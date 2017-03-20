@@ -525,6 +525,12 @@ TF1* fit_scurve (TH1F* pScurve)
     //std::cout << YELLOW << "Estimates: Start: " << cStart << " Stop: " << cStop << " Mid: " << cMid << " Width: " << cWidth << RESET <<  std::endl;
 
     //fitting function using error function
+    TObject* cObj = nullptr;
+    cObj = gROOT->FindObject ("SCurveFit");
+
+    if (cObj != nullptr)
+        delete cObj;
+
     TF1* cFit = new TF1 ("SCurveFit", MyErf, cStart - 10, cStop + 10, 2);
 
     cFit->SetParName (0, "Pedestal");
@@ -560,8 +566,8 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
     long int cBegin = *cTSvector.begin();
     long int cEnd = cTSvector.back();
 
-    TH2F* cPedestal = new TH2F ("Pedestals", "Pedestals", cNFiles, cBegin, cEnd, 254, -.5, 253.5);
-    TH2F* cNoise = new TH2F ("Noise", "Noise", cNFiles, cBegin, cEnd, 254, -.5, 253.5);
+    TH2F* cPedestal = new TH2F ("Pedestals", Form ("SCurve Midpoint_TP%d", pTPAmplitude ), cNFiles, cBegin, cEnd, 254, -.5, 253.5);
+    TH2F* cNoise = new TH2F ("Noise", Form ("SCurve Width_TP%d", pTPAmplitude), cNFiles, cBegin, cEnd, 254, -.5, 253.5);
 
     std::string pHistName = Form ("SCurves%d", pTPAmplitude);
 
@@ -579,6 +585,8 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
         {
             for (auto cKey : *cDir->GetListOfKeys() )
             {
+                if (cKey == nullptr) std::cout << RED << "Error: key has a problem !" << RESET << std::endl;
+
                 std::string cGraphName = static_cast<std::string> (cKey->GetName() );
 
                 long int cTimestamp = extract_timesamp (cFilename);
@@ -589,14 +597,24 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
                     int cChannel = atoi (cGraphName.substr (cGraphName.find ("Channel") + 7, 3 ).c_str() );
                     TH1F* cTmpHist;// = static_cast<TGraph*> (cKey->ReadObj() );
                     cDir->GetObject (cGraphName.c_str(), cTmpHist);
-                    //here need to parse the directory name
-                    //std::cout << cGraphName << " " << cKey->GetName() << std::endl;
 
-                    TF1* cFit = fit_scurve (cTmpHist);
-                    cPedestal->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (0) );
-                    cNoise->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (1) );
-                    cMeanPedestal += cFit->GetParameter (0);
-                    cScurveCounter++;
+                    if (cTmpHist == nullptr)
+                        std::cout << RED << "Error, histogram object " << cGraphName << " for timestamp " << cTimestamp << " does not exist!" << RESET << std::endl;
+
+                    else
+                    {
+                        //here need to parse the directory name
+                        //std::cout << cGraphName << " " << cKey->GetName() << std::endl;
+
+                        TF1* cFit = fit_scurve (cTmpHist);
+
+                        if (cFit->GetParameter (0) == 0 || cFit->GetParameter (1) == 0) std::cout << RED << cFilename << " " << cGraphName << " " << cTimestamp << RESET << std::endl;
+
+                        cPedestal->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (0) );
+                        cNoise->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (1) );
+                        cMeanPedestal += cFit->GetParameter (0);
+                        cScurveCounter++;
+                    }
                 }
             }
         }
@@ -648,8 +666,8 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
     cCanvas->Update();
     cPedestal->GetXaxis()->SetTimeDisplay (1);
     cNoise->GetXaxis()->SetTimeDisplay (1);
-    cPedestal->GetZaxis()->SetRangeUser (cMeanPedestal - 10, cMeanPedestal + 10);
-    cNoise->GetZaxis()->SetRangeUser (0.5, 2.5);
+    cPedestal->GetZaxis()->SetRangeUser (cMeanPedestal - 20, cMeanPedestal + 20);
+    cNoise->GetZaxis()->SetRangeUser (0.5, 5.5);
     cPedestal->GetXaxis()->SetTitle ("Time");
     cNoise->GetXaxis()->SetTitle ("Time");
     cPedestal->GetYaxis()->SetTitle ("Channel");
@@ -890,8 +908,8 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
 
 void analyze()
 {
-    std::string cTimefile = "timefile_chip3";
-    std::string cDatadir = "Data/Chip3_75kGy";
+    std::string cTimefile = "timefile_chip0";
+    std::string cDatadir = "Data/Chip0_55kGy";
     timepair cTimepair = get_times (cTimefile);
     //plot_sweep (cDatadir, cTimepair, "Ipa");
     //plot_bias (cDatadir, cTimepair, "VBG_LDO", "temperature");
@@ -911,6 +929,6 @@ void analyze()
     //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
     //plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
     //plot_lv (cDatadir, cTimepair, 4, 'I');
-    plot_scurves (cDatadir,  cTimepair, 0);
+    plot_scurves (cDatadir,  cTimepair, 225);
 }
 #endif
