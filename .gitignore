@@ -2,3 +2,5 @@ Data/
 analyze_cc.d
 tags
 *.pdf
+*kGy.tex
+Results/

@@ -1034,8 +1034,8 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
 
 void analyze()
 {
-    //std::string cTimefile = "timefile_chip1";
-    //std::string cDatadir = "Data/Chip1_358kGy";
+    std::string cTimefile = "timefile_chip1";
+    std::string cDatadir = "Data/Chip1_358kGy";
 
     //std::string cTimefile = "timefile_chip0";
     //std::string cDatadir = "Data/Chip0_55kGy";
@@ -1043,8 +1043,8 @@ void analyze()
     //std::string cTimefile = "timefile_chip2";
     //std::string cDatadir = "Data/Chip2_42kGy";
 
-    std::string cTimefile = "timefile_chip3";
-    std::string cDatadir = "Data/Chip3_75kGy";
+    //std::string cTimefile = "timefile_chip3";
+    //std::string cDatadir = "Data/Chip3_75kGy";
 
 
     std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
