@@ -2,10 +2,13 @@
 #define __ANALYZE__
 
 #include <iostream>
-#include <dirent.h>
+//#include <dirent.h>
+#include <glob.h>
 #include "ConsoleColor.h"
+#include <fstream>
 
 #include "TROOT.h"
+#include "TStyle.h"
 #include "TCanvas.h"
 #include "TGraph.h"
 #include "TGraphErrors.h"
@@ -15,6 +18,7 @@
 #include "TDirectory.h"
 #include "TTree.h"
 #include "TH1D.h"
+#include "TH2.h"
 #include "TMath.h"
 #include "TGaxis.h"
 #include "TTimeStamp.h"
@@ -41,35 +45,51 @@ void format_timeaxis (TGraph* pGraph)
 
 std::vector<std::string> list_folders (std::string pDirectory, std::string pFilename)
 {
-    std::vector<std::string> cFilelist;
-    DIR* dir = opendir (pDirectory.c_str() );
+    glob_t glob_result;
+    pDirectory += "/*";
+    glob (pDirectory.c_str(), GLOB_TILDE | GLOB_MARK, NULL, &glob_result);
+    std::vector<std::string> dirs;
 
-    struct dirent* entry = readdir (dir);
-
-    while (entry != NULL)
+    for (unsigned int i = 0; i < glob_result.gl_pathc; ++i)
     {
-        if (entry->d_type == DT_DIR)
-        {
-            std::string cFilename = pDirectory + "/";
+        if (std::string (glob_result.gl_pathv[i]).back() == '/')
+            dirs.push_back (std::string (glob_result.gl_pathv[i])  + pFilename );
 
-            if (static_cast<std::string> (entry->d_name).find (".") == std::string::npos)
-            {
-                cFilename += static_cast<std::string> (entry->d_name);
-
-                cFilename += "/";
-                cFilename += pFilename;
-                cFilelist.push_back (cFilename);
-                //std::cout << cFilename << std::endl;
-            }
-        }
-
-        entry = readdir (dir);
+        //std::cout << std::string (glob_result.gl_pathv[i]) +  pFilename << std::endl;
     }
 
-    closedir (dir);
-    std::sort (cFilelist.begin(), cFilelist.end() );
-    return cFilelist;
+    globfree (&glob_result);
+    return dirs;
 }
+//std::vector<std::string> cFilelist;
+//DIR* dir = opendir (pDirectory.c_str() );
+
+//struct dirent* entry = readdir (dir);
+
+//while (entry != NULL)
+//{
+//if (entry->d_type == DT_DIR)
+//{
+//std::string cFilename = pDirectory + "/";
+
+//if (static_cast<std::string> (entry->d_name).find (".") == std::string::npos)
+//{
+//cFilename += static_cast<std::string> (entry->d_name);
+
+//cFilename += "/";
+//cFilename += pFilename;
+//cFilelist.push_back (cFilename);
+////std::cout << cFilename << std::endl;
+//}
+//}
+
+//entry = readdir (dir);
+//}
+
+//closedir (dir);
+//std::sort (cFilelist.begin(), cFilelist.end() );
+//return cFilelist;
+//}
 
 void merge_files (std::string pDatadir, std::string pOutfile, bool pTemperature = true)
 {
@@ -553,8 +573,8 @@ double MyErf ( double* x, double* par )
 
     // if ( x[0] < x0 ) fitval = 0.5 * TMath::Erfc( ( x0 - x[0] ) / width );
     // else fitval = 0.5 + 0.5 * TMath::Erf( ( x[0] - x0 ) / width );
-    if ( x[0] < x0 ) fitval = 0.5 * erfc ( ( x0 - x[0] ) / sqrt (2.) * width );
-    else fitval = 0.5 + 0.5 * erf ( ( x[0] - x0 ) / sqrt (2.) * width );
+    if ( x[0] < x0 ) fitval = 0.5 * erfc ( ( x0 - x[0] ) / (sqrt (2.) * width ) );
+    else fitval = 0.5 + 0.5 * erf ( ( x[0] - x0 ) / (sqrt (2.) * width ) );
 
     return fitval;
 }
@@ -595,9 +615,10 @@ TF1* fit_scurve (TH1F* pScurve)
 void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  = 0 )
 {
     //temporary for testing
-    TCanvas* aCanvas = new TCanvas ("test", "test");
+    //TCanvas* aCanvas = new TCanvas ("test", "test");
 
     int cCounter = 0;
+    //int cHistCounter = 0;
 
     std::cout << BOLDBLUE << "Plotting SCurves with TP Amplitude " << pTPAmplitude << " in data directory: " << pDatadir  << RESET << std::endl;
     int cChipId = atoi (pDatadir.substr (pDatadir.find ("_") - 1, 1).c_str() );
@@ -652,17 +673,22 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
 
                     else
                     {
-                        //here need to parse the directory name
-                        //std::cout << cGraphName << " " << cKey->GetName() << std::endl;
+                        for (int iBin = 0; iBin < cTmpHist->GetNbinsX(); iBin++)
+                        {
+                            float cOccupancy = cTmpHist->GetBinContent (iBin);
+                            float cBinError = sqrt ( (cOccupancy * (1 - cOccupancy) ) / 200.  );
+                            cTmpHist->SetBinError (iBin, cBinError );
+                        }
 
                         TF1* cFit = fit_scurve (cTmpHist);
 
-                        //if (cFit->GetChisquare() / cFit->GetNDF() > 0.01)
+                        //if (cHistCounter < 10)
                         //{
-                        //std::cout << BLUE << "Reusults: Midpoint: " << cFit->GetParameter (0) << " Width: " << cFit->GetParameter (1) << " Chi^2/NDF: " << cFit->GetChisquare() / cFit->GetNDF() << RESET << std::endl;
+                        //std::string cDrawOption = (cHistCounter == 0) ? "PE X0" : "PE X0 same";
                         //aCanvas->cd();
-                        //cTmpHist->Draw ("P0 same");
-                        //cFit->Draw ("same");
+                        //cTmpHist->DrawCopy (cDrawOption.c_str() );
+                        //cFit->DrawCopy ("same");
+                        //cHistCounter++;
                         //}
 
                         if (cFit->GetParameter (0) == 0 || cFit->GetParameter (1) == 0) std::cout << RED << cFilename << " " << cGraphName << " " << cTimestamp << RESET << std::endl;
@@ -671,11 +697,14 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
                         cNoise->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (1) );
                         cMeanPedestal += cFit->GetParameter (0);
                         cScurveCounter++;
+
+                        //if (cScurveCounter == 5) break;
                     }
                 }
             }
 
             cFile->Close();
+            //break;
         }
         else std::cout << BOLDRED << "ERROR, could not open File: " << cFilename << RESET << std::endl;
 
@@ -728,7 +757,7 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
     cPedestal->GetXaxis()->SetTimeDisplay (1);
     cNoise->GetXaxis()->SetTimeDisplay (1);
     cPedestal->GetZaxis()->SetRangeUser (cMeanPedestal - 20, cMeanPedestal + 20);
-    cNoise->GetZaxis()->SetRangeUser (0, 10);
+    cNoise->GetZaxis()->SetRangeUser (0, 5);
     cPedestal->GetXaxis()->SetTitle ("Time");
     cNoise->GetXaxis()->SetTitle ("Time");
     cPedestal->GetYaxis()->SetTitle ("Channel");
@@ -1034,8 +1063,8 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
 
 void analyze()
 {
-    std::string cTimefile = "timefile_chip1";
-    std::string cDatadir = "Data/Chip1_358kGy";
+    //std::string cTimefile = "timefile_chip1";
+    //std::string cDatadir = "Data/Chip1_358kGy";
 
     //std::string cTimefile = "timefile_chip0";
     //std::string cDatadir = "Data/Chip0_55kGy";
@@ -1043,8 +1072,8 @@ void analyze()
     //std::string cTimefile = "timefile_chip2";
     //std::string cDatadir = "Data/Chip2_42kGy";
 
-    //std::string cTimefile = "timefile_chip3";
-    //std::string cDatadir = "Data/Chip3_75kGy";
+    std::string cTimefile = "timefile_chip3";
+    std::string cDatadir = "Data/Chip3_75kGy";
 
 
     std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
@@ -1052,23 +1081,23 @@ void analyze()
 
     timepair cTimepair = get_times (cTimefile);
 
-    //plot all the sweeps
+    ////plot all the sweeps
 
-    for (auto sweep : cSweeps)
-    {
-        plot_sweep (cDatadir, cTimepair, sweep);
-        plot_bias (cDatadir, cTimepair, sweep, "time");
-    }
+    //for (auto sweep : cSweeps)
+    //{
+    //plot_sweep (cDatadir, cTimepair, sweep);
+    //plot_bias (cDatadir, cTimepair, sweep, "time");
+    //}
 
-    for (auto meas : cMeasurement)
-        plot_bias (cDatadir, cTimepair, meas, "time");
+    //for (auto meas : cMeasurement)
+    //plot_bias (cDatadir, cTimepair, meas, "time");
 
-    plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
-    plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
-    plot_lv (cDatadir, cTimepair, 4, 'I');
+    //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
+    //plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
+    //plot_lv (cDatadir, cTimepair, 4, 'I');
 
 
     //plot_scurves (cDatadir, cTimepair, 0);
-    //plot_scurves (cDatadir, cTimepair, 225);
+    plot_scurves (cDatadir, cTimepair, 225);
 }
 #endif

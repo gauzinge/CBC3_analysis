@@ -15,17 +15,17 @@ echo "
 \caption{Pedestal and Noise extracted after offset tuning.}
 \end{figure}
 
-%\subsection{SCurves}
-%\begin{figure}[!htb]
-%\centering
-%\includegraphics[width=.8\textwidth]{\"Results/Chip${chip}_${dose}kGy/SCurves_TP0_Chip${chip}_${dose}kGy\".png}
-%\caption{SCurves without Test Pulse}
-%\end{figure}
-%\begin{figure}[!htb]
-%\centering
-%\includegraphics[width=.8\textwidth]{\"Results/Chip${chip}_${dose}kGy/SCurves_TP225_Chip${chip}_${dose}kGy\".png}
-%\caption{SCurves with Test Pulse=30}
-%\end{figure}
+\subsection{SCurves}
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=.8\textwidth]{\"Results/Chip${chip}_${dose}kGy/SCurves_TP0_Chip${chip}_${dose}kGy\".png}
+\caption{SCurves without Test Pulse}
+\end{figure}
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=.8\textwidth]{\"Results/Chip${chip}_${dose}kGy/SCurves_TP225_Chip${chip}_${dose}kGy\".png}
+\caption{SCurves with Test Pulse=30}
+\end{figure}
 
 \subsection{Digital Current}
 \begin{figure}[!htb]
