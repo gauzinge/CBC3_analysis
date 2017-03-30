@@ -61,6 +61,7 @@ std::vector<std::string> list_folders (std::string pDirectory, std::string pFile
     globfree (&glob_result);
     return dirs;
 }
+//this does not work because of unterminated #define in Availability.h (apple!)
 //std::vector<std::string> cFilelist;
 //DIR* dir = opendir (pDirectory.c_str() );
 
@@ -203,6 +204,7 @@ struct timepair
 {
     std::vector<std::pair<long int, long int>> timepair; //pair of start and stop timestamps, if running last stop is 0
     float doserate; //kGy/h
+    float temperature; // C
 };
 
 timepair get_times (std::string pTimefile)
@@ -215,6 +217,7 @@ timepair get_times (std::string pTimefile)
     {
         std::string cName;
         float cDoserate;
+        float cTemperature;
         int year, month, day, hour, minute, seconds;
 
         cTimefile >> cName >> cDoserate;
@@ -222,6 +225,13 @@ timepair get_times (std::string pTimefile)
 
         if (cName != "doserate") std::cout << "ERROR in file format" << std::endl;
         else cPair.doserate = cDoserate;
+
+        cTimefile >> cName >> cTemperature;
+        std::cout << YELLOW << cName << ": " << cTemperature << " C" << RESET << std::endl;
+
+        if (cName != "temperature") std::cout << "ERROR in file format" << std::endl;
+        else cPair.temperature = cTemperature;
+
 
         std::pair<long int, long int> tmppair;
 
@@ -344,34 +354,41 @@ TGraph* get_dosegraph (timepair pTimepair, long int pTimestamp_first, long int p
 TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int pChipId)
 {
     //because Sarah wants it, I'm going to put the original value in the title and scale all the points to the original value
+    int cPointCounter = 0;
     double cStartValue;
     double x;
-    pGraph->GetPoint (0, x, cStartValue);
+    bool finished = false;
+
+    while (!finished)
+    {
+        pGraph->GetPoint (cPointCounter, x, cStartValue);
+        float cTemperature = get_temperature (Form ("TLog_chip%1d.txt", pChipId), x);
+
+        if ( (fabs (pTimepair.temperature - cTemperature) < 3) && (get_dose (pTimepair, x) == 0) )
+        {
+            std::cout << GREEN << "Found first point at nominal temperature: " << cTemperature << " " << pTimepair.temperature << " " << x << RESET << std::endl;
+            finished = true;
+        }
+        else if (cPointCounter > 15)
+        {
+            std::cout << "Error, someting might be wrong, can't find a corresponding temperature!" << std::endl;
+            break;
+        }
+
+        cPointCounter++;
+    }
+
     std::string cGraphTitle = static_cast<std::string> (pGraph->GetTitle() );
 
-    if (cGraphTitle.find ("V") != std::string::npos)
-        cGraphTitle += Form (" StartValue = %3.3f V", cStartValue);
-    else if (cGraphTitle.find ("I") != std::string::npos)
-        cGraphTitle += Form (" StartValue = %3.3f A", cStartValue);
-    else
-        cGraphTitle += Form (" StartValue = %3.3f", cStartValue);
+    //if (cGraphTitle.find ("V") != std::string::npos)
+    //cGraphTitle += Form (" StartValue = %3.3f V", cStartValue);
+    //else if (cGraphTitle.find ("I") != std::string::npos)
+    //cGraphTitle += Form (" StartValue = %3.3f A", cStartValue);
+    //else
+    //cGraphTitle += Form (" StartValue = %3.3f", cStartValue);
 
-    pGraph->SetTitle (cGraphTitle.c_str() );
+    //pGraph->SetTitle (cGraphTitle.c_str() );
 
-    //now rescale
-    //for (int i = 0; i < pGraph->GetN(); i++)
-    //{
-    //double x;
-    //double y;
-    //pGraph->GetPoint (i, x, y);
-    //pGraph->SetPoint (i, static_cast<long int> (x), ( ( (y - cStartValue) / cStartValue) ) * 100 );
-    //}
-
-    //std::string cAxisTitle = pGraph->GetYaxis()->GetTitle();
-    //cAxisTitle += " relative Value [%]";
-    //pGraph -> GetYaxis()->SetTitle (cAxisTitle.c_str() );
-
-    //timepair pTimepair = get_times (pTimefile);
     float cDoserate = pTimepair.doserate / 3600.; // 20kGy/h / 3600s
     //first, analyze the passed graph
     int cN = pGraph->GetN();
@@ -382,6 +399,9 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
     //float cMinY = cY[cLocMax];
     int cLocMax = TMath::LocMax (cN, cX);
     long int cTimestamp = cX[cLocMax];
+
+    float cMaxRel = 100 * ( (cMaxY - cStartValue) / cStartValue);
+    float cMinRel = 100 * ( (cStartValue - cMinY) / cStartValue);
 
 
     //then, fill the dose graph
@@ -474,7 +494,20 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
 
     format_timeaxis (pGraph);
     upperPad->cd();
+    //get rid of the default x Axis
+    pGraph->GetYaxis()->SetLabelSize (0);
+    pGraph->GetYaxis()->SetLabelOffset (999);
+    pGraph->GetYaxis()->SetTitleOffset (999);
+    pGraph->GetYaxis()->SetTicks ("+");
+
     pGraph->Draw ("AP");
+    TGaxis* cGraphAxis = new TGaxis (pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmax(), cMinY, cMaxY, 510, "=R+");
+    cGraphAxis->SetTitle (pGraph->GetYaxis()->GetTitle() );
+    cGraphAxis->Draw ("same");
+    cGraphAxis->SetTitleOffset (1.1);
+    cGraphAxis->SetLineColor (1);
+    cGraphAxis->SetLabelColor (1);
+    cGraphAxis->SetTitleColor (1);
 
     TGaxis* cAxis = new TGaxis (pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmax(), 0, cMaxDose, 510, "+L");
     cAxis->SetTitle ("Dose [kGy]");
@@ -483,6 +516,17 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
     cAxis->SetLabelColor (2);
     cAxis->SetTitleColor (2);
 
+    TGaxis* cRelativeAxis = new TGaxis (pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmax(), -cMinRel, cMaxRel, 510, "=L-BS");
+    cRelativeAxis->SetTickSize (0.02);
+    cRelativeAxis->SetTitle ("Relative Value [%]");
+    //cRelativeAxis->SetTitleOffset();
+    cRelativeAxis->CenterTitle();
+    cRelativeAxis->Draw ("same");
+    cRelativeAxis->SetLabelOffset (-0.01);
+    cRelativeAxis->SetLineColor (4);
+    cRelativeAxis->SetLabelColor (4);
+    cRelativeAxis->SetTitleColor (4);
+
     cDoseGraph->Draw ("PL same");
 
     lowerPad->cd();
@@ -490,8 +534,8 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
     cCanvas->Modified();
     cCanvas->Update();
 
-    std::string cFilename = cGraphTitle.substr (0, cGraphTitle.find ("StartValue") );
-    cCanvas->SaveAs (create_filename (pDatadir, cFilename ) );
+    //std::string cFilename = cGraphTitle.substr (0, cGraphTitle.find ("StartValue") );
+    cCanvas->SaveAs (create_filename (pDatadir, cGraphTitle ) );
 
     return cDoseGraph;
 }
@@ -1069,11 +1113,11 @@ void analyze()
     //std::string cTimefile = "timefile_chip0";
     //std::string cDatadir = "Data/Chip0_55kGy";
 
-    //std::string cTimefile = "timefile_chip2";
-    //std::string cDatadir = "Data/Chip2_42kGy";
+    std::string cTimefile = "timefile_chip2";
+    std::string cDatadir = "Data/Chip2_42kGy";
 
-    std::string cTimefile = "timefile_chip3";
-    std::string cDatadir = "Data/Chip3_75kGy";
+    //std::string cTimefile = "timefile_chip3";
+    //std::string cDatadir = "Data/Chip3_75kGy";
 
 
     std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
@@ -1083,21 +1127,21 @@ void analyze()
 
     ////plot all the sweeps
 
-    //for (auto sweep : cSweeps)
-    //{
-    //plot_sweep (cDatadir, cTimepair, sweep);
-    //plot_bias (cDatadir, cTimepair, sweep, "time");
-    //}
+    for (auto sweep : cSweeps)
+    {
+        plot_sweep (cDatadir, cTimepair, sweep);
+        plot_bias (cDatadir, cTimepair, sweep, "time");
+    }
 
-    //for (auto meas : cMeasurement)
-    //plot_bias (cDatadir, cTimepair, meas, "time");
+    for (auto meas : cMeasurement)
+        plot_bias (cDatadir, cTimepair, meas, "time");
 
-    //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
-    //plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
-    //plot_lv (cDatadir, cTimepair, 4, 'I');
+    plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
+    plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
+    plot_lv (cDatadir, cTimepair, 4, 'I');
 
 
     //plot_scurves (cDatadir, cTimepair, 0);
-    plot_scurves (cDatadir, cTimepair, 225);
+    //plot_scurves (cDatadir, cTimepair, 225);
 }
 #endif
