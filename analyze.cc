@@ -207,7 +207,7 @@ struct timepair
     float temperature; // C
 };
 
-timepair get_times (std::string pTimefile)
+timepair get_times (std::string pTimefile, bool pDaylightSavingTime = false)
 {
     std::ifstream cTimefile;
     cTimefile.open (pTimefile.c_str() );
@@ -242,7 +242,12 @@ timepair get_times (std::string pTimefile)
             if (cName == "start")
             {
                 //-1 because I need UTC
-                TTimeStamp tsstart (year, month, day, hour - 1, minute, seconds);
+                int UTChour;
+
+                if (pDaylightSavingTime) UTChour = hour - 2;
+                else UTChour = hour - 1;
+
+                TTimeStamp tsstart (year, month, day, UTChour, minute, seconds);
                 tmppair.first = static_cast<long int> (tsstart.GetSec() );
                 std::cout << GREEN << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstart.GetSec() << " in UTC" << RESET << std::endl;
 
@@ -253,7 +258,10 @@ timepair get_times (std::string pTimefile)
                     if (cName == "stop")
                     {
                         //-1 because I need UTC
-                        TTimeStamp tsstop (year, month, day, hour - 1, minute, seconds);
+                        if (pDaylightSavingTime) UTChour = hour - 2;
+                        else UTChour = hour - 1;
+
+                        TTimeStamp tsstop (year, month, day, UTChour, minute, seconds);
                         tmppair.second = static_cast<long int> (tsstop.GetSec() );
                         std::cout << RED << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstop.GetSec() << " in UTC" << RESET << std::endl;
 
@@ -442,7 +450,7 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
     //get the minimum and maximum of the Y axis - and scale that range by the max dose
     float cScaleFactor = (pGraph->GetYaxis()->GetXmax() - pGraph->GetYaxis()->GetXmin() ) / cMaxDose;
     TTimeStamp ts (static_cast<time_t> (cMaxDoseTime) );
-    std::cout << BLUE << "Creating Dose Graph with the following parameters: max dose: " << cMaxDose << " at time: " << ts.AsString ("lc") << " min Y " << cMinY << " max Y: " << cMaxY << " scale: " << cScaleFactor << RESET << std::endl;
+    std::cout << BLUE << "Creating Dose Graph with the following parameters: max dose: " << cMaxDose << " at time: " << ts.AsString ("lc") << " UTC min Y " << cMinY << " max Y: " << cMaxY << " scale: " << cScaleFactor << RESET << std::endl;
     //done filling the dose graph, I still need to scale it
     cN = cDoseGraph->GetN();
     cY = cDoseGraph->GetY();
@@ -509,12 +517,17 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
     cGraphAxis->SetLabelColor (1);
     cGraphAxis->SetTitleColor (1);
 
-    TGaxis* cAxis = new TGaxis (pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmax(), 0, cMaxDose, 510, "+L");
-    cAxis->SetTitle ("Dose [kGy]");
-    cAxis->Draw ("same");
-    cAxis->SetLineColor (2);
-    cAxis->SetLabelColor (2);
-    cAxis->SetTitleColor (2);
+    if (cMaxDose > 0)
+    {
+        TGaxis* cAxis = new TGaxis (pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmax(), pGraph->GetYaxis()->GetXmax(), 0, cMaxDose, 510, "+L");
+        cAxis->SetTitle ("Dose [kGy]");
+        cAxis->Draw ("same");
+        cAxis->SetLineColor (2);
+        cAxis->SetLabelColor (2);
+        cAxis->SetTitleColor (2);
+
+        cDoseGraph->Draw ("PL same");
+    }
 
     TGaxis* cRelativeAxis = new TGaxis (pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmax(), -cMinRel, cMaxRel, 510, "=L-BS");
     cRelativeAxis->SetTickSize (0.02);
@@ -527,7 +540,6 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
     cRelativeAxis->SetLabelColor (4);
     cRelativeAxis->SetTitleColor (4);
 
-    cDoseGraph->Draw ("PL same");
 
     lowerPad->cd();
     cTemperatureGraph->Draw ("AP");
@@ -1113,12 +1125,14 @@ void analyze()
     //std::string cTimefile = "timefile_chip0";
     //std::string cDatadir = "Data/Chip0_55kGy";
 
-    std::string cTimefile = "timefile_chip2";
-    std::string cDatadir = "Data/Chip2_42kGy";
+    //std::string cTimefile = "timefile_chip2";
+    //std::string cDatadir = "Data/Chip2_42kGy";
 
     //std::string cTimefile = "timefile_chip3";
     //std::string cDatadir = "Data/Chip3_75kGy";
 
+    std::string cTimefile = "timefile_chip4";
+    std::string cDatadir = "Data/Chip4_76kGy";
 
     std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
     std::vector<std::string> cMeasurement{"VBG_LDO", "Vpafb", "Nc50", "VDDA", "MinimalPower", "Ibias"};
@@ -1127,21 +1141,21 @@ void analyze()
 
     ////plot all the sweeps
 
-    for (auto sweep : cSweeps)
-    {
-        plot_sweep (cDatadir, cTimepair, sweep);
-        plot_bias (cDatadir, cTimepair, sweep, "time");
-    }
+    //for (auto sweep : cSweeps)
+    //{
+    //plot_sweep (cDatadir, cTimepair, sweep);
+    //plot_bias (cDatadir, cTimepair, sweep, "time");
+    //}
 
-    for (auto meas : cMeasurement)
-        plot_bias (cDatadir, cTimepair, meas, "time");
+    //for (auto meas : cMeasurement)
+    //plot_bias (cDatadir, cTimepair, meas, "time");
 
-    plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
-    plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
-    plot_lv (cDatadir, cTimepair, 4, 'I');
+    //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
+    //plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
+    //plot_lv (cDatadir, cTimepair, 4, 'I');
 
 
-    //plot_scurves (cDatadir, cTimepair, 0);
-    //plot_scurves (cDatadir, cTimepair, 225);
+    plot_scurves (cDatadir, cTimepair, 0);
+    plot_scurves (cDatadir, cTimepair, 225);
 }
 #endif
