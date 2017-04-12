@@ -1,0 +1,19 @@
+\documentclass[a4paper,12pt, final]{article}
+\usepackage{placeins}
+
+\let\Oldsection\section
+\renewcommand{\section}{\FloatBarrier\Oldsection}
+
+\let\Oldsubsection\subsection
+\renewcommand{\subsection}{\FloatBarrier\Oldsubsection}
+
+\let\Oldsubsubsection\subsubsection
+\renewcommand{\subsubsection}{\FloatBarrier\Oldsubsubsection}
+\usepackage{graphicx}
+\begin{document}
+\input{plots_chip1_358kGy}
+\input{plots_chip0_055kGy}
+\input{plots_chip2_042kGy}
+\input{plots_chip3_075kGy}
+\input{plots_chip4_076kGy}
+\end{document}

@@ -4,3 +4,7 @@ tags
 *.pdf
 *kGy.tex
 Results/
+*.log
+*.fls
+*.fdb_latexmk
+*.aux
