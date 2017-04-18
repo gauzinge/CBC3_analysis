@@ -377,7 +377,7 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
             std::cout << GREEN << "Found first point at nominal temperature: " << cTemperature << " " << pTimepair.temperature << " " << x << RESET << std::endl;
             finished = true;
         }
-        else if (cPointCounter > 15)
+        else if (cPointCounter > 155)
         {
             std::cout << "Error, someting might be wrong, can't find a corresponding temperature!" << std::endl;
             break;
@@ -529,17 +529,19 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
         cDoseGraph->Draw ("PL same");
     }
 
-    TGaxis* cRelativeAxis = new TGaxis (pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmax(), -cMinRel, cMaxRel, 510, "=L-BS");
-    cRelativeAxis->SetTickSize (0.02);
-    cRelativeAxis->SetTitle ("Relative Value [%]");
-    //cRelativeAxis->SetTitleOffset();
-    cRelativeAxis->CenterTitle();
-    cRelativeAxis->Draw ("same");
-    cRelativeAxis->SetLabelOffset (-0.01);
-    cRelativeAxis->SetLineColor (4);
-    cRelativeAxis->SetLabelColor (4);
-    cRelativeAxis->SetTitleColor (4);
-
+    if (finished)
+    {
+        TGaxis* cRelativeAxis = new TGaxis (pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmin(), pGraph->GetXaxis()->GetXmin(), pGraph->GetYaxis()->GetXmax(), -cMinRel, cMaxRel, 510, "=L-BS");
+        cRelativeAxis->SetTickSize (0.02);
+        cRelativeAxis->SetTitle ("Relative Value [%]");
+        //cRelativeAxis->SetTitleOffset();
+        cRelativeAxis->CenterTitle();
+        cRelativeAxis->Draw ("same");
+        cRelativeAxis->SetLabelOffset (-0.01);
+        cRelativeAxis->SetLineColor (4);
+        cRelativeAxis->SetLabelColor (4);
+        cRelativeAxis->SetTitleColor (4);
+    }
 
     lowerPad->cd();
     cTemperatureGraph->Draw ("AP");
@@ -1131,31 +1133,48 @@ void analyze()
     //std::string cTimefile = "timefile_chip3";
     //std::string cDatadir = "Data/Chip3_75kGy";
 
-    std::string cTimefile = "timefile_chip4";
-    std::string cDatadir = "Data/Chip4_76kGy";
+    //second irradiation
+    //
+    //std::string cTimefile = "timefile_chip4";
+    //std::string cDatadir = "Data/Chip4_76kGy";
+
+    //std::string cTimefile = "timefile_chip5";
+    //std::string cDatadir = "Data/Chip5_46kGy";
+
+    std::string cTimefile = "timefile_chip6";
+    std::string cDatadir = "Data/Chip6_51kGy";
+
+    //std::string cTimefile = "timefile_chip7";
+    //std::string cDatadir = "Data/Chip7_60kGy";
+
+    //std::string cTimefile = "timefile_chip8";
+    //std::string cDatadir = "Data/Chip8_80kGy";
+
+    //std::string cTimefile = "timefile_chip9";
+    //std::string cDatadir = "Data/Chip9_59kGy";
 
     std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
     std::vector<std::string> cMeasurement{"VBG_LDO", "Vpafb", "Nc50", "VDDA", "MinimalPower", "Ibias"};
 
-    timepair cTimepair = get_times (cTimefile);
+    timepair cTimepair = get_times (cTimefile, true);
 
     ////plot all the sweeps
 
-    //for (auto sweep : cSweeps)
-    //{
-    //plot_sweep (cDatadir, cTimepair, sweep);
-    //plot_bias (cDatadir, cTimepair, sweep, "time");
-    //}
+    for (auto sweep : cSweeps)
+    {
+        plot_sweep (cDatadir, cTimepair, sweep);
+        plot_bias (cDatadir, cTimepair, sweep, "time");
+    }
 
-    //for (auto meas : cMeasurement)
-    //plot_bias (cDatadir, cTimepair, meas, "time");
+    for (auto meas : cMeasurement)
+        plot_bias (cDatadir, cTimepair, meas, "time");
 
-    //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
-    //plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
-    //plot_lv (cDatadir, cTimepair, 4, 'I');
+    plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
+    plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
+    plot_lv (cDatadir, cTimepair, 4, 'I');
 
 
-    plot_scurves (cDatadir, cTimepair, 0);
-    plot_scurves (cDatadir, cTimepair, 225);
+    //plot_scurves (cDatadir, cTimepair, 0);
+    //plot_scurves (cDatadir, cTimepair, 225);
 }
 #endif
