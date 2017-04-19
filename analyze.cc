@@ -27,6 +27,7 @@
 #include "TLegend.h"
 
 int gCanvasCounter = 0;
+bool gDaylightSavingTime = true;
 
 
 const char* create_filename (std::string pDatadir, std::string pName)
@@ -41,6 +42,7 @@ void format_timeaxis (TGraph* pGraph)
 {
     pGraph->GetXaxis()->SetTimeDisplay (1);
     pGraph->GetXaxis()->SetTimeFormat ("%d-%Hh");
+    //pGraph->GetXaxis()->SetTimeOffset (0, "gmt");
 }
 
 std::vector<std::string> list_folders (std::string pDirectory, std::string pFilename)
@@ -132,8 +134,10 @@ void merge_files (std::string pDatadir, std::string pOutfile, bool pTemperature 
 
 float get_temperature (std::string pTFile, long int pTimestamp)
 {
+    //pTimestamp is in local
     float cTemperature = 0;
     std::ifstream cFile (pTFile);
+
 
     if (cFile.is_open() )
     {
@@ -145,8 +149,12 @@ float get_temperature (std::string pTFile, long int pTimestamp)
         {
             cFile >> cTimestamp >> cReadTemperature >> cUnit;
 
+            if (gDaylightSavingTime) cTimestamp += (1 * 3600);
+
+            //else cTimestamp += 3600;
+
             //consider it good when within 50 seconds
-            if (fabs (pTimestamp - cTimestamp) < 30 && cReadTemperature > -30)
+            if (fabs (pTimestamp - cTimestamp) < 30 && cReadTemperature > -50)
             {
                 cTemperature = cReadTemperature;
                 //std::cout << "Found " << cTimestamp << " close to " << pTimestamp << std::endl;
@@ -176,7 +184,11 @@ TGraph* get_temperatureGraph (std::string pTFile)
         {
             cFile >> cTimestamp >> cReadTemperature >> cUnit;
 
-            if (cReadTemperature > -20) cGraph->SetPoint (cGraph->GetN(), cTimestamp, cReadTemperature);
+            if (gDaylightSavingTime) cTimestamp += (1 * 3600);
+
+            //else cTimestamp += 3600;
+
+            if (cReadTemperature > -50) cGraph->SetPoint (cGraph->GetN(), cTimestamp, cReadTemperature);
         }
 
     }
@@ -207,11 +219,13 @@ struct timepair
     float temperature; // C
 };
 
-timepair get_times (std::string pTimefile, bool pDaylightSavingTime = false)
+timepair get_times (std::string pTimefile)
 {
     std::ifstream cTimefile;
     cTimefile.open (pTimefile.c_str() );
     timepair cPair;
+
+    int cOffset = (gDaylightSavingTime) ? 3600 : 0;
 
     if (cTimefile.is_open() )
     {
@@ -241,13 +255,9 @@ timepair get_times (std::string pTimefile, bool pDaylightSavingTime = false)
 
             if (cName == "start")
             {
-                //-1 because I need UTC
-                int UTChour;
 
-                if (pDaylightSavingTime) UTChour = hour - 2;
-                else UTChour = hour - 1;
-
-                TTimeStamp tsstart (year, month, day, UTChour, minute, seconds);
+                //TODO
+                TTimeStamp tsstart (year, month, day, hour, minute, seconds, 0, false, cOffset);
                 tmppair.first = static_cast<long int> (tsstart.GetSec() );
                 std::cout << GREEN << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstart.GetSec() << " in UTC" << RESET << std::endl;
 
@@ -257,11 +267,8 @@ timepair get_times (std::string pTimefile, bool pDaylightSavingTime = false)
 
                     if (cName == "stop")
                     {
-                        //-1 because I need UTC
-                        if (pDaylightSavingTime) UTChour = hour - 2;
-                        else UTChour = hour - 1;
-
-                        TTimeStamp tsstop (year, month, day, UTChour, minute, seconds);
+                        //TODO
+                        TTimeStamp tsstop (year, month, day, hour, minute, seconds, 0, false, cOffset);
                         tmppair.second = static_cast<long int> (tsstop.GetSec() );
                         std::cout << RED << cName << " " << year << "." << month << "." << day << " " << hour << ":" << minute << ":" << seconds << " which is " << tsstop.GetSec() << " in UTC" << RESET << std::endl;
 
@@ -289,6 +296,7 @@ timepair get_times (std::string pTimefile, bool pDaylightSavingTime = false)
 
 float get_dose (timepair pTimepair, long int pTimestamp)
 {
+    //timestamp in local, timepair to be seen
     float cDoserate = pTimepair.doserate / 3600;
     float cDose = 0;
 
@@ -317,6 +325,7 @@ float get_dose (timepair pTimepair, long int pTimestamp)
 
 TGraph* get_dosegraph (timepair pTimepair, long int pTimestamp_first, long int pTimestamp_last)
 {
+    //begin and end in local
     //then, fill the dose graph
     TGraph* cDoseGraph = new TGraph();
     float cDoserate = pTimepair.doserate / 3600.; // 20kGy/h / 3600s
@@ -372,12 +381,17 @@ TGraph* draw_time (std::string pDatadir, timepair pTimepair, TGraph* pGraph, int
         pGraph->GetPoint (cPointCounter, x, cStartValue);
         float cTemperature = get_temperature (Form ("TLog_chip%1d.txt", pChipId), x);
 
-        if ( (fabs (pTimepair.temperature - cTemperature) < 3) && (get_dose (pTimepair, x) == 0) )
+        //std::cout << "Nominal: " << pTimepair.temperature << " Found: " << cTemperature << " Dose: " << get_dose (pTimepair, x) << " Point: " << cPointCounter << " of: " << pGraph->GetN() << std::endl;
+
+        if ( (fabs (pTimepair.temperature - cTemperature) < 2) && (get_dose (pTimepair, x) == 0) )
         {
-            std::cout << GREEN << "Found first point at nominal temperature: " << cTemperature << " " << pTimepair.temperature << " " << x << RESET << std::endl;
+            std::cout << GREEN << "Found first point " << cPointCounter << " at nominal temperature: " << cTemperature << " expected temperature " << pTimepair.temperature << " timestamp " << x << RESET << std::endl;
             finished = true;
         }
-        else if (cPointCounter > 155)
+        //else if ( (fabs (pTimepair.temperature - cTemperature) < 3) && (get_dose (pTimepair, x) != 0) )
+        //std::cout << YELLOW << "Found first point " << cPointCounter << " at nominal temperature: " << cTemperature << " expected temperature " << pTimepair.temperature << " timestamp " << x << " but at dose " << get_dose (pTimepair, x) <<  RESET << std::endl;
+
+        else if (cPointCounter == pGraph->GetN() )
         {
             std::cout << "Error, someting might be wrong, can't find a corresponding temperature!" << std::endl;
             break;
@@ -588,6 +602,11 @@ void plot_lv (std::string pDatadir, timepair pTimepair, int pChannel, char pUnit
         {
             cFile >> cTimestamp >> cVoltage.at (0) >> cCurrent.at (0) >> cVoltage.at (1) >> cCurrent.at (1) >> cVoltage.at (2) >> cCurrent.at (2) >> cVoltage.at (3) >> cCurrent.at (3);
 
+            //add to the timestamp since I want local
+            if (gDaylightSavingTime) cTimestamp += 1 * 3600;
+
+            //else cTimestamp += 3600;
+
             if (pUnit == 'V' && cVoltage.at (pChannel - 1) < 10)
                 cGraph->SetPoint (cGraph->GetN(), cTimestamp, cVoltage.at (pChannel - 1) );
 
@@ -612,13 +631,17 @@ void plot_lv (std::string pDatadir, timepair pTimepair, int pChannel, char pUnit
 
 long int extract_timesamp (std::string pFilename)
 {
+    int cOffset = (gDaylightSavingTime) ? 3600 : 0;
+    //in the filename the date/time string is in local time!
+    //so don't do anything with it
     std::string cTimestring = pFilename.substr (pFilename.find (":") - 11, 14);
     int day = atoi (cTimestring.substr (0, 2).c_str() ); //07-03-17_09:50
     int month = atoi (cTimestring.substr (3, 2).c_str() ); //07-03-17_09:50
     int year = atoi (cTimestring.substr (6, 2).c_str() ); //07-03-17_09:50
     int hour = atoi (cTimestring.substr (9, 2).c_str() ); //07-03-17_09:50
     int minute = atoi (cTimestring.substr (12, 2).c_str() ); //07-03-17_09:50
-    TTimeStamp ts (year, month, day, hour - 1, minute, 0);
+
+    TTimeStamp ts (year, month, day, hour, minute, 0, 0, false, cOffset);
     long int cTimestamp = static_cast<long int> (ts.GetSec() );
     return cTimestamp;
 }
@@ -687,6 +710,7 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
     // get the individual time stamps of the measurements and sort them
     std::vector<long int> cTSvector;
 
+    //times in local time from filenames
     for (auto& cFilename : cFileList)
         cTSvector.push_back (extract_timesamp (cFilename) );
 
@@ -717,6 +741,7 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
 
                 std::string cGraphName = static_cast<std::string> (cKey->GetName() );
 
+                //local time, so no mods
                 long int cTimestamp = extract_timesamp (cFilename);
 
                 //find only SCurves, not derivatives
@@ -740,29 +765,17 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
 
                         TF1* cFit = fit_scurve (cTmpHist);
 
-                        //if (cHistCounter < 10)
-                        //{
-                        //std::string cDrawOption = (cHistCounter == 0) ? "PE X0" : "PE X0 same";
-                        //aCanvas->cd();
-                        //cTmpHist->DrawCopy (cDrawOption.c_str() );
-                        //cFit->DrawCopy ("same");
-                        //cHistCounter++;
-                        //}
-
                         if (cFit->GetParameter (0) == 0 || cFit->GetParameter (1) == 0) std::cout << RED << cFilename << " " << cGraphName << " " << cTimestamp << RESET << std::endl;
 
                         cPedestal->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (0) );
                         cNoise->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (1) );
                         cMeanPedestal += cFit->GetParameter (0);
                         cScurveCounter++;
-
-                        //if (cScurveCounter == 5) break;
                     }
                 }
             }
 
             cFile->Close();
-            //break;
         }
         else std::cout << BOLDRED << "ERROR, could not open File: " << cFilename << RESET << std::endl;
 
@@ -821,14 +834,8 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
     cPedestal->GetYaxis()->SetTitle ("Channel");
     cNoise->GetYaxis()->SetTitle ("Channel");
     middlePad->cd();
-    //TH1D* cProjX = cPedestal->ProjectionX ("px", 112, 112);
-    //cProjX->GetXaxis()->SetTimeDisplay (1);
-    //cProjX->Draw();
     cPedestal->Draw ("colz");
     upperPad->cd();
-    //TH1D* cProjXNoise = cNoise->ProjectionX ("pxNoise", 112, 112);
-    //cProjXNoise->GetXaxis()->SetTimeDisplay (1);
-    //cProjXNoise->Draw();
     cNoise->Draw ("colz");
     cCanvas->SaveAs (create_filename (pDatadir, Form ("SCurves_TP%d", pTPAmplitude ) ) );
 }
@@ -863,8 +870,8 @@ void plot_pedenoise (std::string pDatadir, timepair pTimepair, std::string pHist
                 {
                     TH1F* cTmpHist;// = static_cast<TGraph*> (cKey->ReadObj() );
                     cDir->GetObject (cGraphName.c_str(), cTmpHist);
+                    //local time, all good
                     long int cTimestamp = extract_timesamp (cFilename);
-                    //std::cout << cGraphName << " " << cKey->GetName() << std::endl;
 
                     int cPoint = cGraph->GetN();
 
@@ -955,6 +962,12 @@ void plot_sweep (std::string pDatadir, timepair pTimepair, std::string pBias)
                             TGraph* cTmpGraph;// = static_cast<TGraph*> (cKey->ReadObj() );
                             cDir->GetObject (cGraphName.c_str(), cTmpGraph);
                             long int cTimestamp = atoi (cGraphName.substr (cGraphName.find ("TS") + 2).c_str() );
+
+                            //this timestamp is in UTC, so add to it
+                            if (gDaylightSavingTime) cTimestamp += (1 * 3600);
+
+                            //else cTimestamp += 3600;
+
                             cTmpGraph->SetTitle (Form ("%3.0f %s", get_dose (pTimepair, cTimestamp), "kGy" ) );
                             float cDose = get_dose (pTimepair, cTimestamp);
                             float cPercentage = cDose / cTotalDose;
@@ -1068,6 +1081,10 @@ void plot_bias (std::string pDatadir, timepair pTimepair, std::string pBias, std
 
                         if (*cBias == pBias)
                         {
+                            if (gDaylightSavingTime) cTimestamp += (1 * 3600);
+
+                            //else cTimestamp += 3600;
+
                             //std::cout << *cBias << " " << cTimestamp << " " << cValue << std::endl;
                             if (pParameter == "time")
                                 cGraph->SetPoint (cGraph->GetN(), cTimestamp, cValue);
@@ -1134,15 +1151,15 @@ void analyze()
     //std::string cDatadir = "Data/Chip3_75kGy";
 
     //second irradiation
-    //
+
     //std::string cTimefile = "timefile_chip4";
     //std::string cDatadir = "Data/Chip4_76kGy";
 
     //std::string cTimefile = "timefile_chip5";
     //std::string cDatadir = "Data/Chip5_46kGy";
 
-    std::string cTimefile = "timefile_chip6";
-    std::string cDatadir = "Data/Chip6_51kGy";
+    //std::string cTimefile = "timefile_chip6";
+    //std::string cDatadir = "Data/Chip6_51kGy";
 
     //std::string cTimefile = "timefile_chip7";
     //std::string cDatadir = "Data/Chip7_60kGy";
@@ -1150,13 +1167,13 @@ void analyze()
     //std::string cTimefile = "timefile_chip8";
     //std::string cDatadir = "Data/Chip8_80kGy";
 
-    //std::string cTimefile = "timefile_chip9";
-    //std::string cDatadir = "Data/Chip9_59kGy";
+    std::string cTimefile = "timefile_chip9";
+    std::string cDatadir = "Data/Chip9_59kGy";
 
     std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
     std::vector<std::string> cMeasurement{"VBG_LDO", "Vpafb", "Nc50", "VDDA", "MinimalPower", "Ibias"};
 
-    timepair cTimepair = get_times (cTimefile, true);
+    timepair cTimepair = get_times (cTimefile);
 
     ////plot all the sweeps
 
