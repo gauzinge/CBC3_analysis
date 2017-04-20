@@ -8,3 +8,4 @@ Results/
 *.fls
 *.fdb_latexmk
 *.aux
+.DS_store
