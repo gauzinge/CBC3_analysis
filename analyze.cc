@@ -767,10 +767,18 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
 
                         if (cFit->GetParameter (0) == 0 || cFit->GetParameter (1) == 0) std::cout << RED << cFilename << " " << cGraphName << " " << cTimestamp << RESET << std::endl;
 
-                        cPedestal->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (0) );
-                        cNoise->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (1) );
-                        cMeanPedestal += cFit->GetParameter (0);
-                        cScurveCounter++;
+                        float cPedestalVal = cFit->GetParameter (0);
+                        float cNoiseVal = cFit->GetParameter (1);
+
+                        if (cPedestalVal > 0 && cPedestalVal < 1024)
+                        {
+                            cPedestal->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (0) );
+                            cMeanPedestal += cFit->GetParameter (0);
+                            cScurveCounter++;
+                        }
+
+                        if (cNoiseVal > 0 && cNoiseVal < 50)
+                            cNoise->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (1) );
                     }
                 }
             }
@@ -783,6 +791,7 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
         std::cout << "Done with File " << cCounter << " out of " << cNFiles << std::endl;
     }
 
+    std::cout << cMeanPedestal << "  " << cScurveCounter << std::endl;
     cMeanPedestal /= cScurveCounter;
 
     TGraph* cTempGraph = get_temperatureGraph (Form ("TLog_chip%1d.txt", cChipId) );
@@ -1161,14 +1170,14 @@ void analyze()
     //std::string cTimefile = "timefile_chip6";
     //std::string cDatadir = "Data/Chip6_51kGy";
 
-    //std::string cTimefile = "timefile_chip7";
-    //std::string cDatadir = "Data/Chip7_60kGy";
+    std::string cTimefile = "timefile_chip7";
+    std::string cDatadir = "Data/Chip7_60kGy";
 
     //std::string cTimefile = "timefile_chip8";
     //std::string cDatadir = "Data/Chip8_80kGy";
 
-    std::string cTimefile = "timefile_chip9";
-    std::string cDatadir = "Data/Chip9_59kGy";
+    //std::string cTimefile = "timefile_chip9";
+    //std::string cDatadir = "Data/Chip9_59kGy";
 
     std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
     std::vector<std::string> cMeasurement{"VBG_LDO", "Vpafb", "Nc50", "VDDA", "MinimalPower", "Ibias"};
