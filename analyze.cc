@@ -1177,21 +1177,21 @@ void analyze()
 
     ////plot all the sweeps
 
-    for (auto sweep : cSweeps)
-    {
-        plot_sweep (cDatadir, cTimepair, sweep);
-        plot_bias (cDatadir, cTimepair, sweep, "time");
-    }
+    //for (auto sweep : cSweeps)
+    //{
+    //plot_sweep (cDatadir, cTimepair, sweep);
+    //plot_bias (cDatadir, cTimepair, sweep, "time");
+    //}
 
-    for (auto meas : cMeasurement)
-        plot_bias (cDatadir, cTimepair, meas, "time");
+    //for (auto meas : cMeasurement)
+    //plot_bias (cDatadir, cTimepair, meas, "time");
 
-    plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
-    plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
-    plot_lv (cDatadir, cTimepair, 4, 'I');
+    //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
+    //plot_pedenoise (cDatadir, cTimepair, "Noise", "time");
+    //plot_lv (cDatadir, cTimepair, 4, 'I');
 
 
     //plot_scurves (cDatadir, cTimepair, 0);
-    //plot_scurves (cDatadir, cTimepair, 225);
+    plot_scurves (cDatadir, cTimepair, 225);
 }
 #endif
