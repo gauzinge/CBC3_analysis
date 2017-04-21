@@ -27,6 +27,7 @@
 #include "TLegend.h"
 
 int gCanvasCounter = 0;
+int gCounter = 0;
 bool gDaylightSavingTime = true;
 
 
@@ -693,10 +694,20 @@ TF1* fit_scurve (TH1F* pScurve)
     return cFit;
 }
 
+void draw_debug_scurves (TCanvas* pCanvas, TH1F* pHist, TF1* pFit)
+{
+    pCanvas->cd();
+    std::string cDrawOption = (gCounter == 0) ? "PE X0" : "PE X0 same";
+    //std::string cDrawOption = "PE X0 same";
+    pHist->DrawCopy (cDrawOption.c_str() );
+    pFit->DrawCopy ("same");
+    gCounter++;
+}
+
 void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  = 0 )
 {
     //temporary for testing
-    //TCanvas* aCanvas = new TCanvas ("test", "test");
+    //TCanvas* cDebugCanvas = new TCanvas ("debug", "debug");
 
     int cCounter = 0;
     //int cHistCounter = 0;
@@ -779,6 +790,13 @@ void plot_scurves (std::string pDatadir, timepair pTimepair, int pTPAmplitude  =
 
                         if (cNoiseVal > 0 && cNoiseVal < 50)
                             cNoise->SetBinContent (cPedestal->FindBin (cTimestamp, cChannel), cFit->GetParameter (1) );
+
+                        //this is the debug part!
+                        //if ( (cCounter > 4 && cCounter < 13) && (cPedestalVal > 490 && cPedestalVal < 580) && (cNoiseVal < 1.5 || cNoiseVal > 3.5) )
+                        //{
+                        //std::cout << "Found SCurve with PEdestal over 475! " << gCounter << std::endl;
+                        //draw_debug_scurves (cDebugCanvas, cTmpHist, cFit);
+                        //}
                     }
                 }
             }
