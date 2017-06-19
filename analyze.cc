@@ -1188,17 +1188,17 @@ void analyze()
     //std::string cTimefile = "timefile_chip6";
     //std::string cDatadir = "Data/Chip6_51kGy";
 
-    std::string cTimefile = "timefile_chip7";
-    std::string cDatadir = "Data/Chip7_60kGy";
+    //std::string cTimefile = "timefile_chip7";
+    //std::string cDatadir = "Data/Chip7_60kGy";
 
     //std::string cTimefile = "timefile_chip8";
     //std::string cDatadir = "Data/Chip8_80kGy";
 
-    //std::string cTimefile = "timefile_chip9";
-    //std::string cDatadir = "Data/Chip9_59kGy";
+    std::string cTimefile = "timefile_chip9";
+    std::string cDatadir = "Data/Chip9_59kGy";
 
-    std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
-    std::vector<std::string> cMeasurement{"VBG_LDO", "Vpafb", "Nc50", "VDDA", "MinimalPower", "Ibias"};
+    //std::vector<std::string> cSweeps{"VCth", "CAL_Vcasc", "VPLUS1", "VPLUS2", "VBGbias", "Ipa", "Ipre1", "Ipre2", "CAL_I", "Ipsf", "Ipaos", "Icomp", "Ihyst"};
+    //std::vector<std::string> cMeasurement{"VBG_LDO", "Vpafb", "Nc50", "VDDA", "MinimalPower", "Ibias"};
 
     timepair cTimepair = get_times (cTimefile);
 
@@ -1206,11 +1206,13 @@ void analyze()
 
     //for (auto sweep : cSweeps)
     //{
+    //std::string sweep = "VCth";
     //plot_sweep (cDatadir, cTimepair, sweep);
     //plot_bias (cDatadir, cTimepair, sweep, "time");
     //}
 
     //for (auto meas : cMeasurement)
+    //std::string meas = "VBG_LDO";
     //plot_bias (cDatadir, cTimepair, meas, "time");
 
     //plot_pedenoise (cDatadir, cTimepair, "Pedestal", "time");
@@ -1218,7 +1220,7 @@ void analyze()
     //plot_lv (cDatadir, cTimepair, 4, 'I');
 
 
-    //plot_scurves (cDatadir, cTimepair, 0);
-    plot_scurves (cDatadir, cTimepair, 225);
+    plot_scurves (cDatadir, cTimepair, 0);
+    //plot_scurves (cDatadir, cTimepair, 225);
 }
 #endif
